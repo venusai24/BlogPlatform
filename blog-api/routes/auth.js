@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router();
+const authrouter = express.Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const mysql = require("mysql2");
@@ -18,7 +18,7 @@ const db = mysql.createPool({
 const JWT_SECRET = "my_secret_key";
 
 
-router.post('/register', async (req, res) => {
+authrouter.post('/register', async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -61,7 +61,7 @@ router.post('/register', async (req, res) => {
 });
 
 
-router.post('/login', async (req, res) => {
+authrouter.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
     const query = "SELECT * FROM users WHERE username = ?";
@@ -100,4 +100,4 @@ router.post('/login', async (req, res) => {
     });
 });
 
-module.exports = router;
+module.exports = authrouter;
