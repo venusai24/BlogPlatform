@@ -15,10 +15,10 @@ mongoose.connection.once('open', () => {
 
 //1)Add a new Blog post
 blogrouter.post("/", async(req, res) => {
-    const { title, content, author, tags } = req.body;
+    const { title, content, author} = req.body;
 
     try{
-        const newPost = new BlogContent({ title, content, author, tags });
+        const newPost = new BlogContent({ title, content, author});
         await newPost.save();
         res.status(201).json({ message: "Blog post created successfully", blog: newPost });
     }catch(error){
@@ -103,5 +103,80 @@ blogrouter.delete("/:id", async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 });
+
+const calculateTitleScore = (query, title) => {
+    const normalize = (str) => str.replace(/\s+/g, "").toLowerCase();
+
+    const normalizedQuery = normalize(query);
+    const normalizedTitle = normalize(title);
+
+    if (!normalizedTitle.includes(normalizedQuery)) {
+        return Infinity; 
+    }
+
+    let score = 0;
+
+    
+    const charDifference = Math.abs(query.length - title.length);
+    score += charDifference * 10;
+
+    
+    for (let i = 0; i < Math.min(query.length, title.length); i++) {
+        if (query[i].toLowerCase() === title[i].toLowerCase() && query[i] !== title[i]) {
+            score += 2; 
+        }
+    }
+
+    
+    const querySpaces = query.match(/\s/g) || [];
+    const titleSpaces = title.match(/\s/g) || [];
+    const spaceDifference = Math.abs(querySpaces.length - titleSpaces.length);
+    score += spaceDifference * 5;
+
+    
+    const hasExtraSpaces = title.includes(" ") && !query.includes(" ");
+    if (hasExtraSpaces) {
+        score += 3;
+    }
+
+    return score;
+};
+
+blogrouter.post("/retrieve", async (req, res) => {
+    const { titleQuery } = req.body;
+
+    if (!titleQuery) {
+        return res.status(400).json({ message: "Title query is required" });
+    }
+
+    try {
+        
+        const blogs = await BlogContent.find({}, "_id title");
+
+        
+        const results = blogs
+    .map((blog) => ({
+        id: blog._id,
+        title: blog.title,
+        author: blog.author, // Assuming the Blog schema includes an author field
+        score: calculateTitleScore(titleQuery, blog.title),
+    }))
+    .filter((result) => result.score !== Infinity) // Exclude non-matching titles
+    .sort((a, b) => a.score - b.score); // Sort by score (lower is better)
+
+    res.status(200).json(
+        results.map((result) => ({
+            author: result.author,
+            _id: result.id,
+            title: result.title,
+        }))
+    );
+    } catch (error) {
+        console.error("Error retrieving blogs:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+
 
 module.exports = blogrouter;

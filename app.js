@@ -5,7 +5,7 @@ const cors = require('cors');
 const authRoutes = require('./blog-api/routes/auth');
 const blogRoutes = require('./blog-api/routes/blogs');
 app.use(cors({
-    origin: 'http://localhost:3000', // Allow requests from React frontend
+    origin: 'http://localhost:3000', 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));

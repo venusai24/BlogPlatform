@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './Auth.css';
+import { jwtDecode } from "jwt-decode";
+
 
 function Login() {
   const [username, setUsername] = useState('');
@@ -20,6 +22,9 @@ function Login() {
 
       if (response.status === 200) {
         localStorage.setItem('token', response.data.token); 
+        const decodedToken = jwt_decode(response.data.token);
+        const usernameFromToken = decodedToken.username; // Extract username
+        localStorage.setItem("username", usernameFromToken);
         navigate('/home'); // Redirect to Home Page
       }
     } catch (err) {
