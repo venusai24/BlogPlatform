@@ -3,7 +3,7 @@ const blogrouter = express.Router();
 const mongoose = require('mongoose');
 require("dotenv").config();
 const connectDB = require('./config/dbConn');
-const BlogContent = require('../routes/model/BlogContent');
+const BlogContent = require('./model/BlogContent');
 //Connect to MongoDB
 connectDB();
 

@@ -2299,3 +2299,11 @@ node_modules/sparse-bitfield/index.js
 node_modules/sparse-bitfield/LICENSE
 node_modules/sparse-bitfield/README.md
 node_modules/sparse-bitfield/test.js
+node_modules
+frontend/public/favicon.ico
+frontend/public/index.html
+frontend/public/logo192.png
+frontend/public/logo512.png
+frontend/public/manifest.json
+frontend/src/logo.svg
+frontend/public/robots.txt
