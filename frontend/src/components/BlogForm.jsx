@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import NavBar from "./NavBar";
 
 function BlogForm() {
   const [title, setTitle] = useState("");
@@ -28,6 +29,8 @@ function BlogForm() {
   };
 
   return (
+    <div>
+    <NavBar/>
     <form onSubmit={handleSubmit} className="p-6 border rounded-md">
       <h2 className="text-xl font-bold mb-4">Create a Blog</h2>
       <input
@@ -53,6 +56,7 @@ function BlogForm() {
         Upload
       </button>
     </form>
+    </div>
   );
 }
 
