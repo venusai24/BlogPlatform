@@ -151,7 +151,7 @@ blogrouter.post("/retrieve", async (req, res) => {
 
     try {
         
-        const blogs = await BlogContent.find({}, "_id title");
+        const blogs = await BlogContent.find({}, "_id title author");
 
         
         const results = blogs
