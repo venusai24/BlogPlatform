@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 require("dotenv").config();
 const connectDB = require('./config/dbConn');
 const BlogContent = require('./model/BlogContent');
+const summarizeText = require('./summarize');
 //Connect to MongoDB
 connectDB();
 
@@ -14,21 +15,22 @@ mongoose.connection.once('open', () => {
 //Endpoints
 
 //1)Add a new Blog post
-blogrouter.post("/", async(req, res) => {
-    const { title, content, author} = req.body;
+blogrouter.post("/", async (req, res) => {
+    const { title, content, author, summary } = req.body;
 
-    try{
-        const newPost = new BlogContent({ title, content, author});
+    try {
+        const newPost = new BlogContent({ title, content, author, summary });
         await newPost.save();
         res.status(201).json({ message: "Blog post created successfully", blog: newPost });
-    }catch(error){
+    } catch (error) {
         if (error.code === 11000) {
             return res.status(400).json({ message: "A blog with this title already exists for the same author" });
         }
         console.error(error);
-        res.status(500).json({message:"Server Error"});
+        res.status(500).json({ message: "Server Error" });
     }
 });
+
 
 //2)Retrieve all blog posts
 blogrouter.get("/", async(req, res) => {
@@ -41,7 +43,7 @@ blogrouter.get("/", async(req, res) => {
     }
 });
 
-//3)Get Blog _id by ID and Author
+//3)Get Blog _id by Title and Author
 blogrouter.get("/getid", async (req, res) => {
     const { author, title } = req.query;
 
@@ -158,11 +160,11 @@ blogrouter.post("/retrieve", async (req, res) => {
     .map((blog) => ({
         id: blog._id,
         title: blog.title,
-        author: blog.author, // Assuming the Blog schema includes an author field
+        author: blog.author, 
         score: calculateTitleScore(titleQuery, blog.title),
     }))
-    .filter((result) => result.score !== Infinity) // Exclude non-matching titles
-    .sort((a, b) => a.score - b.score); // Sort by score (lower is better)
+    .filter((result) => result.score !== Infinity) 
+    .sort((a, b) => a.score - b.score); 
 
     res.status(200).json(
         results.map((result) => ({
@@ -177,6 +179,71 @@ blogrouter.post("/retrieve", async (req, res) => {
     }
 });
 
+blogrouter.post("/summarize", async(req, res) => {
+    const { content } = req.body;
+    if (!content) {
+        return res.status(400).json({ message: "Content is required" });
+    }
+    summarizeText(content, "llama-3.3-70b-versatile").then((finalSummary) => {
+        return res.status(200).json({
+            message: "Summarized successfully",
+            summary: finalSummary
+        });
+      });
+})
 
+blogrouter.post("/summary", async (req, res) => {
+    const { _id, summary } = req.body;
+  
+    if (!_id || !summary) {
+      return res.status(400).json({ message: "Blog ID and summary are required." });
+    }
+  
+    try {
+      // Find the blog by ID and update the summary field
+      const updatedBlog = await BlogContent.findByIdAndUpdate(
+        _id,
+        { summary },
+        { new: true, runValidators: true } // Return the updated document
+      );
+  
+      if (!updatedBlog) {
+        return res.status(404).json({ message: "Blog not found" });
+      }
+  
+      res.status(200).json({
+        message: "Summary updated successfully",
+        blog: updatedBlog,
+      });
+    } catch (error) {
+      console.error("Error updating summary:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+  
+
+blogrouter.get("/:id", async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const blog = await BlogContent.findById(id).select("title author content"); // Select only the required fields
+
+        if (!blog) {
+            return res.status(404).json({ message: "Blog post not found" });
+        }
+
+        res.status(200).json({ 
+            message: "Blog post retrieved successfully", 
+            blog: { 
+                title: blog.title, 
+                author: blog.author, 
+                content: blog.content 
+            } 
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
 
 module.exports = blogrouter;

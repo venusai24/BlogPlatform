@@ -5,6 +5,7 @@ const blogcontentSchema = new Schema({
     title: { type: String, required: true },
     content: { type: String, required: true },
     author: { type: String, required: true },
+    summary: { type: String }, // Added summary field
     tags: [String],
     likes: { type: Number, default: 0 },
     comments: [

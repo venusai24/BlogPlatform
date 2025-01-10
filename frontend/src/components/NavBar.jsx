@@ -53,7 +53,7 @@ const NavBar = ({ onSearchResults }) => {
           {["Dashboard", "Post", "Subscriptions"].map((item) => (
             <Link
               key={item}
-              to={`/${item}`}
+              to={item === "Dashboard" ? "/home" : `/${item}`}
               className="text-gray-600 hover:text-black transition duration-200"
             >
               {item.charAt(0).toUpperCase() + item.slice(1)}
