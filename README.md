@@ -4,7 +4,7 @@ Blog platform
 <br>
 
 MERN stack Blogging application which uses MongoDB database to store blogs and uses LLMs to summarize content in blogs.
-TO reduce the overuse of LLMs for every summarization Redis is used for caching the summarizes for different tokens which can directly be used to summarize other content without using LLMs.
+To reduce the overuse of LLMs for every summarization Redis is used for caching the summarizes for different tokens which can directly be used to summarize other content without using LLMs. 
 
 <br>
 
@@ -30,3 +30,9 @@ nodemon server.js. By default the port for backend is 5000
 <br>
 
 run frontend on another terminal by changing directory to frontend and then typing npm start. By default the port for frontend is 3000
+
+<br>
+
+The GROG cloud API key  is not provided and the user who is using this application should make his own groqcloud account and put his own api key.
+
+<br>
