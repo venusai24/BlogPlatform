@@ -24,7 +24,9 @@ Home page:
 
 <br>
 Uploading Page:
+
 ![Screenshot 2025-01-28 201510](https://github.com/user-attachments/assets/734b9954-28e1-40a0-bf75-68db977d8e5e)
+
 ![Screenshot 2025-01-28 201522](https://github.com/user-attachments/assets/bc9ba648-5b71-40d0-9d4a-77ea7f3938e6)
 
 
