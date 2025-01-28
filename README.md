@@ -13,12 +13,21 @@ Pages:
 <br>
 
 Authentication page:
+![Screenshot 2025-01-28 201607](https://github.com/user-attachments/assets/528fb5ae-eb81-4305-b9de-043794c9f066)
 
 <br>
 Home page:
 
+![Screenshot 2025-01-28 201437](https://github.com/user-attachments/assets/7984b9e0-f95e-40a6-9b8a-cad4999dd7f2)
+
+
+
 <br>
 Uploading Page:
+![Screenshot 2025-01-28 201510](https://github.com/user-attachments/assets/734b9954-28e1-40a0-bf75-68db977d8e5e)
+![Screenshot 2025-01-28 201522](https://github.com/user-attachments/assets/bc9ba648-5b71-40d0-9d4a-77ea7f3938e6)
+
+
 <br>
 
 Subscription to be implemented later. Also trying to implement summary based searching of blogs.
