@@ -63,12 +63,12 @@ const NavBar = ({ onSearchResults }) => {
 
         {/* My Posts Button */}
         <div>
-          <a
-            href="#"
-            className="px-4 py-2 border rounded-full text-gray-600 hover:bg-gray-100"
-          >
-            My Posts
-          </a>
+        <Link
+    to="/MyPosts"
+    className="px-4 py-2 border rounded-full text-gray-600 hover:bg-gray-100"
+  >
+    My Posts
+  </Link>
         </div>
       </nav>
     </div>

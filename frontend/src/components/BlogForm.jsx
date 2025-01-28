@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import NavBar from "./NavBar";
 import Summary from "./Summary";
+import { useNavigate } from "react-router-dom";
 
 function BlogForm() {
   const [activeTab, setActiveTab] = useState("Blog");
@@ -9,6 +10,8 @@ function BlogForm() {
   const [content, setContent] = useState("");
   const [summary, setSummary] = useState("");
   const [blogs, setBlogs] = useState([]);
+
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();

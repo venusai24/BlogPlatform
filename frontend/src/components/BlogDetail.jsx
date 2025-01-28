@@ -2,10 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import NavBar from './NavBar';
+import { useNavigate } from "react-router-dom";
+
+
 
 function BlogDetail() {
+  const navigate = useNavigate();
   const { id } = useParams(); 
-  const [blogs, setBlog] = useState(null);
+  const [blog, setBlog] = useState(null);
+  const [blogs, setBlogs] = useState([]);
+
+  const handleSearchResults = (results) => {
+    setBlogs(results); 
+  };
 
   useEffect(() => {
     
@@ -36,7 +45,7 @@ function BlogDetail() {
             <div
             key={blog._id}
             className="border rounded-md p-4 mb-4 cursor-pointer hover:shadow-lg"
-            onClick={() => navigate(`/blog/${blog._id}`)} // Navigate to BlogDetails
+            onClick={() => navigate(`/blog/${blog._id}`)} 
             >
             <h2 className="font-bold text-lg">{blog.title}</h2>
             <p className="text-gray-600">by {blog.author}</p>

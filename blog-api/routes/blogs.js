@@ -5,7 +5,7 @@ require("dotenv").config();
 const connectDB = require('./config/dbConn');
 const BlogContent = require('./model/BlogContent');
 const summarizeText = require('./summarize');
-//Connect to MongoDB
+
 connectDB();
 
 mongoose.connection.once('open', () => {
@@ -226,7 +226,7 @@ blogrouter.get("/:id", async (req, res) => {
     const { id } = req.params;
 
     try {
-        const blog = await BlogContent.findById(id).select("title author content"); // Select only the required fields
+        const blog = await BlogContent.findById(id).select("title author content"); 
 
         if (!blog) {
             return res.status(404).json({ message: "Blog post not found" });
@@ -246,4 +246,36 @@ blogrouter.get("/:id", async (req, res) => {
     }
 });
 
+ //Endpoint to retrieve all posts by a specific author
+blogrouter.post("/retrieve/author", async (req, res) => {
+    const { author } = req.body;
+
+    console.log(req.body);
+
+    if (!author) {
+        return res.status(400).json({ message: "Author name is required" });
+    }
+    try {
+
+        const blogs = await BlogContent.find({ author : author}).select("_id title summary"); 
+
+        if (blogs.length === 0) {
+            return res.status(404).json({ message: `No blogs found for author: ${author}` });
+        }
+
+        res.status(200).json({
+            message: `Blogs retrieved successfully for author: ${author}`,
+            blogs,
+        });
+    } catch (error) {
+        console.error("Error retrieving blogs by author:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+
+
+
+
 module.exports = blogrouter;
+

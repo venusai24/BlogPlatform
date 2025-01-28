@@ -5,6 +5,7 @@ import Register from './components/Register';
 import Home from './components/Home';
 import BlogDetail from './components/BlogDetail';
 import BlogForm from './components/BlogForm';
+import MyPosts from './components/MyPosts';
 import './App.css';
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
         <Route path="/home" element = {<Home />} />
         <Route path="/blog/:id" element={<BlogDetail/>} />
         <Route path="/Post" element = {<BlogForm/>}/>
+        <Route path="/MyPosts" element = {<MyPosts/>}/>
       </Routes>
     </Router>
   );

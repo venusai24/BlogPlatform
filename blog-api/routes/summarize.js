@@ -2,29 +2,34 @@ const Groq = require("groq-sdk");
 const redis = require("redis");
 const crypto = require("crypto");
 
-const groq = new Groq({ apiKey: "your_groq_api_key" });
+const groq = new Groq({ apiKey: "your_groq_api_key" }); // Please replace with your GROQ API key.
 
-// Redis client setup
-const redisClient = redis.createClient();
-redisClient.connect();
+let redisClient;
+let redisEnabled = true;
 
-// Helper function to create a hash key for caching
+(async () => {
+  try {
+    redisClient = redis.createClient();
+    await redisClient.connect();
+    console.log("Connected to Redis server.");
+  } catch (error) {
+    console.error("Failed to connect to Redis server. Redis functionality will be disabled.", error);
+    redisEnabled = false;
+  }
+})();
+
 const generateHashKey = (prefix, content) =>
   `${prefix}:${crypto.createHash("sha256").update(content).digest("hex")}`;
 
-// Helper function to estimate token count
 const estimateTokens = (text) => Math.ceil(text.length / 4);
 
-// Get ideal word limit based on the model's maximum token capacity
 const getWordLimit = (model) => {
   const maxTokens = model === "llama-3.3-70b-versatile" ? 130000 : 4096;
   return Math.floor((maxTokens / 1.33) / 1.75);
 };
 
-// Helper function to split text into paragraphs
 const splitByParagraphs = (text) => text.split(/\n+/).filter((p) => p.trim() !== "");
 
-// Helper function to chunk text with paragraph boundaries
 const chunkTextWithParagraphs = (text, maxWords) => {
   const paragraphs = splitByParagraphs(text);
   const chunks = [];
@@ -51,15 +56,19 @@ const chunkTextWithParagraphs = (text, maxWords) => {
   return chunks;
 };
 
-// Function to summarize a single chunk using Groq with caching
 const summarizeChunk = async (chunk, compressionRatio, model = "llama-3.3-70b-versatile") => {
   const chunkHashKey = generateHashKey("chunk", chunk);
 
-  // Check cache for existing summary
-  const cachedSummary = await redisClient.get(chunkHashKey);
-  if (cachedSummary) {
-    console.log(`Cache hit for chunk: ${chunkHashKey}`);
-    return cachedSummary;
+  if (redisEnabled) {
+    try {
+      const cachedSummary = await redisClient.get(chunkHashKey);
+      if (cachedSummary) {
+        console.log(`Cache hit for chunk: ${chunkHashKey}`);
+        return cachedSummary;
+      }
+    } catch (error) {
+      console.error("Redis error while fetching chunk:", error);
+    }
   }
 
   console.log(`Cache miss for chunk: ${chunkHashKey}`);
@@ -79,8 +88,13 @@ const summarizeChunk = async (chunk, compressionRatio, model = "llama-3.3-70b-ve
 
     const summary = chatCompletion.choices[0]?.message?.content?.trim() || "";
 
-    // Cache the result with a TTL (e.g., 24 hours)
-    await redisClient.set(chunkHashKey, summary, { EX: 86400 });
+    if (redisEnabled) {
+      try {
+        await redisClient.set(chunkHashKey, summary, { EX: 86400 });
+      } catch (error) {
+        console.error("Redis error while setting chunk:", error);
+      }
+    }
 
     return summary;
   } catch (error) {
@@ -89,7 +103,6 @@ const summarizeChunk = async (chunk, compressionRatio, model = "llama-3.3-70b-ve
   }
 };
 
-// Function to calculate compression ratio
 const calculateCompressionRatio = (text) => {
   const wordCount = text.split(/\s+/).length;
   const redundancyScore = Math.min(Math.max(wordCount / 1000, 0), 1);
@@ -103,15 +116,19 @@ const calculateCompressionRatio = (text) => {
   }
 };
 
-// Main function to summarize text with caching
 const summarizeText = async (text, model = "llama-3.3-70b-versatile") => {
   const textHashKey = generateHashKey("full-text", text);
 
-  // Check full-text cache
-  const cachedSummary = await redisClient.get(textHashKey);
-  if (cachedSummary) {
-    console.log(`Cache hit for full text: ${textHashKey}`);
-    return cachedSummary;
+  if (redisEnabled) {
+    try {
+      const cachedSummary = await redisClient.get(textHashKey);
+      if (cachedSummary) {
+        console.log(`Cache hit for full text: ${textHashKey}`);
+        return cachedSummary;
+      }
+    } catch (error) {
+      console.error("Redis error while fetching full text:", error);
+    }
   }
 
   console.log(`Cache miss for full text: ${textHashKey}`);
@@ -120,19 +137,22 @@ const summarizeText = async (text, model = "llama-3.3-70b-versatile") => {
 
   const compressionRatio = calculateCompressionRatio(text);
 
-  // Summarize each chunk and combine results
   const chunkSummaries = await Promise.all(
     chunks.map((chunk) => summarizeChunk(chunk, compressionRatio, model))
   );
   const combinedSummary = chunkSummaries.filter(Boolean).join(" ");
 
-  // Final re-summarization for brevity
   const finalSummary = await summarizeChunk(combinedSummary, 0.3, model);
 
   const finalResult = finalSummary || combinedSummary;
 
-  // Cache the full-text result
-  await redisClient.set(textHashKey, finalResult, { EX: 86400 });
+  if (redisEnabled) {
+    try {
+      await redisClient.set(textHashKey, finalResult, { EX: 86400 });
+    } catch (error) {
+      console.error("Redis error while setting full text:", error);
+    }
+  }
 
   return finalResult;
 };
