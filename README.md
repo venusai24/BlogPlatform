@@ -52,11 +52,11 @@ The GROG cloud API key  is not provided and the user who is using this applicati
 
 <p>DB_HOST=<hostname for eg-"localhost"></p>
 <br>
-<p>DB_PASSWORD=<password></p>
+<p>DB_PASSWORD=`<password>`</p>
 <br>
-<p>DB_USER=<sql db user></p>
+<p>DB_USER=`<sql db user>`</p>
 <br>
-<p>DB_NAME="<database name for sql database>"</p>
+<p>DB_NAME=`<database name for sql database>`</p>
 <br>
-<p>DATABASE_URI = "<database uri for mongodb database>"</p>
+<p>DATABASE_URI = `<database uri for mongodb database>`</p>
 <br>
