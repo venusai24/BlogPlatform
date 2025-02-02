@@ -48,15 +48,11 @@ The GROG cloud API key  is not provided and the user who is using this applicati
 
 <br>
 <h3>Sample .env file:</h3>
-<br>
 
-<p>DB_HOST=<hostname for eg-"localhost"></p>
-<br>
-<p>DB_PASSWORD=`<password>`</p>
-<br>
-<p>DB_USER=`<sql db user>`</p>
-<br>
-<p>DB_NAME=`<database name for sql database>`</p>
-<br>
-<p>DATABASE_URI = `<database uri for mongodb database>`</p>
-<br>
+<pre>
+DB_HOST=localhost
+DB_PASSWORD=<your_password>
+DB_USER=<your_sql_db_user>
+DB_NAME=<your_database_name>
+DATABASE_URI=<your_mongodb_uri>
+</pre>
