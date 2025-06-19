@@ -2,8 +2,8 @@ const express = require('express');
 const blogrouter = express.Router();
 const mongoose = require('mongoose');
 require("dotenv").config();
-const connectDB = require('./config/dbConn');
-const BlogContent = require('./model/BlogContent');
+const connectDB = require('../config/dbConn');
+const BlogContent = require('../model/BlogContent');
 const summarizeText = require('./summarize');
 
 connectDB();
