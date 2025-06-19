@@ -15,8 +15,8 @@ const blogcontentSchema = new Schema({
             timestamp: { type: Date, default: Date.now },
         },
     ],
-}, { timestamps: true });
+}, { timestamps: true }); // Automatically adds createdAt and updatedAt fields
 
-blogcontentSchema.index({ author: 1, title: 1 }, { unique: true });
+blogcontentSchema.index({ author: 1, title: 1 }, { unique: true }); // Compound index on author and title and allows different authors to have posts with the same title.
 
 module.exports = mongoose.model('BlogContent', blogcontentSchema);

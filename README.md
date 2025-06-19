@@ -46,7 +46,7 @@ run frontend on another terminal by changing directory to frontend and then typi
 
 The GROG cloud API key  is not provided and the user who is using this application should make his own groqcloud account and put his own api key.
 <br>
-Setup an SQL database fo authentication and a MongoDB database for storage of content and posts. In a .env file fill the DB_HOST, DB_PASSWORD, DB_USER, DB_NAME and DATABASE_URI.
+Setup an SQL database for authentication and a MongoDB database for storage of content and posts in the blog. In a .env file fill the DB_HOST, DB_PASSWORD, DB_USER, DB_NAME and DATABASE_URI. 
 <br>
 <h3>Sample .env file:</h3>
 
