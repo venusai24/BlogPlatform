@@ -4,7 +4,8 @@ const mongoose = require('mongoose');
 require("dotenv").config();
 const connectDB = require('../config/dbConn');
 const BlogContent = require('../model/BlogContent');
-const summarizeText = require('./summarize');
+const summarizeText = require('../services/summarize');
+const { generateEmbedding, cosineSimilarity } = require('../services/embeddingService');
 
 connectDB();
 
@@ -19,7 +20,21 @@ blogrouter.post("/", async (req, res) => {
     const { title, content, author, summary } = req.body;
 
     try {
-        const newPost = new BlogContent({ title, content, author, summary });
+        // Generate embeddings for new blog
+        const titleEmbedding = await generateEmbedding(title);
+        const contentEmbedding = await generateEmbedding(content);
+        const summaryEmbedding = summary ? await generateEmbedding(summary) : [];
+
+        const newPost = new BlogContent({ 
+            title, 
+            content, 
+            author, 
+            summary,
+            titleEmbedding,
+            contentEmbedding,
+            summaryEmbedding
+        });
+        
         await newPost.save();
         res.status(201).json({ message: "Blog post created successfully", blog: newPost });
     } catch (error) {
@@ -273,6 +288,205 @@ blogrouter.post("/retrieve/author", async (req, res) => {
     }
 });
 
+blogrouter.post("/generate-embeddings", async (req, res) => {
+    try {
+        const blogs = await BlogContent.find({});
+        let updated = 0;
+        
+        for (const blog of blogs) {
+            const updates = {};
+            
+            // Generate embeddings only if they don't exist
+            if (!blog.titleEmbedding || blog.titleEmbedding.length === 0) {
+                updates.titleEmbedding = await generateEmbedding(blog.title);
+            }
+            
+            if (!blog.contentEmbedding || blog.contentEmbedding.length === 0) {
+                updates.contentEmbedding = await generateEmbedding(blog.content);
+            }
+            
+            if (blog.summary && (!blog.summaryEmbedding || blog.summaryEmbedding.length === 0)) {
+                updates.summaryEmbedding = await generateEmbedding(blog.summary);
+            }
+            
+            if (Object.keys(updates).length > 0) {
+                await BlogContent.findByIdAndUpdate(blog._id, updates);
+                updated++;
+            }
+        }
+        
+        res.status(200).json({ 
+            message: `Generated embeddings for ${updated} blogs`,
+            totalBlogs: blogs.length 
+        });
+    } catch (error) {
+        console.error("Error generating embeddings:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+blogrouter.post("/semantic-search", async (req, res) => {
+    const { query, limit = 10, threshold = 0.3 } = req.body;
+
+    if (!query) {
+        return res.status(400).json({ message: "Search query is required" });
+    }
+
+    try {
+        // Generate embedding for the search query
+        const queryEmbedding = await generateEmbedding(query);
+        
+        // Get all blogs with embeddings
+        const blogs = await BlogContent.find({
+            $or: [
+                { titleEmbedding: { $exists: true, $ne: [] } },
+                { contentEmbedding: { $exists: true, $ne: [] } },
+                { summaryEmbedding: { $exists: true, $ne: [] } }
+            ]
+        });
+
+        // Calculate similarity scores
+        const results = blogs.map(blog => {
+            let maxSimilarity = 0;
+            let bestMatch = '';
+            
+            // Check title similarity
+            if (blog.titleEmbedding && blog.titleEmbedding.length > 0) {
+                const titleSim = cosineSimilarity(queryEmbedding, blog.titleEmbedding);
+                if (titleSim > maxSimilarity) {
+                    maxSimilarity = titleSim;
+                    bestMatch = 'title';
+                }
+            }
+            
+            // Check content similarity
+            if (blog.contentEmbedding && blog.contentEmbedding.length > 0) {
+                const contentSim = cosineSimilarity(queryEmbedding, blog.contentEmbedding);
+                if (contentSim > maxSimilarity) {
+                    maxSimilarity = contentSim;
+                    bestMatch = 'content';
+                }
+            }
+            
+            // Check summary similarity
+            if (blog.summaryEmbedding && blog.summaryEmbedding.length > 0) {
+                const summarySim = cosineSimilarity(queryEmbedding, blog.summaryEmbedding);
+                if (summarySim > maxSimilarity) {
+                    maxSimilarity = summarySim;
+                    bestMatch = 'summary';
+                }
+            }
+            
+            return {
+                _id: blog._id,
+                title: blog.title,
+                author: blog.author,
+                summary: blog.summary,
+                similarity: maxSimilarity,
+                matchField: bestMatch,
+                createdAt: blog.createdAt
+            };
+        })
+        .filter(result => result.similarity >= threshold)
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, limit);
+
+        res.status(200).json({
+            message: "Semantic search completed",
+            query,
+            results: results.map(r => ({
+                _id: r._id,
+                title: r.title,
+                author: r.author,
+                summary: r.summary,
+                similarity: Math.round(r.similarity * 100) / 100,
+                matchField: r.matchField,
+                createdAt: r.createdAt
+            }))
+        });
+    } catch (error) {
+        console.error("Error in semantic search:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Enhanced retrieve endpoint with both title and semantic search
+blogrouter.post("/retrieve", async (req, res) => {
+    const { titleQuery, semanticQuery, useSemanticSearch = false } = req.body;
+
+    if (!titleQuery && !semanticQuery) {
+        return res.status(400).json({ message: "Title query or semantic query is required" });
+    }
+
+    try {
+        let results = [];
+
+        if (useSemanticSearch && semanticQuery) {
+            // Use semantic search
+            const queryEmbedding = await generateEmbedding(semanticQuery);
+            
+            const blogs = await BlogContent.find({
+                $or: [
+                    { titleEmbedding: { $exists: true, $ne: [] } },
+                    { contentEmbedding: { $exists: true, $ne: [] } },
+                    { summaryEmbedding: { $exists: true, $ne: [] } }
+                ]
+            });
+
+            results = blogs.map(blog => {
+                let maxSimilarity = 0;
+                
+                if (blog.titleEmbedding && blog.titleEmbedding.length > 0) {
+                    maxSimilarity = Math.max(maxSimilarity, cosineSimilarity(queryEmbedding, blog.titleEmbedding));
+                }
+                
+                if (blog.contentEmbedding && blog.contentEmbedding.length > 0) {
+                    maxSimilarity = Math.max(maxSimilarity, cosineSimilarity(queryEmbedding, blog.contentEmbedding));
+                }
+                
+                if (blog.summaryEmbedding && blog.summaryEmbedding.length > 0) {
+                    maxSimilarity = Math.max(maxSimilarity, cosineSimilarity(queryEmbedding, blog.summaryEmbedding));
+                }
+                
+                return {
+                    _id: blog._id,
+                    title: blog.title,
+                    author: blog.author,
+                    similarity: maxSimilarity
+                };
+            })
+            .filter(result => result.similarity >= 0.3)
+            .sort((a, b) => b.similarity - a.similarity);
+        } else if (titleQuery) {
+            // Use existing title-based search
+            const blogs = await BlogContent.find({}, "_id title author");
+            
+            results = blogs
+                .map((blog) => ({
+                    _id: blog._id,
+                    title: blog.title,
+                    author: blog.author, 
+                    score: calculateTitleScore(titleQuery, blog.title),
+                }))
+                .filter((result) => result.score !== Infinity) 
+                .sort((a, b) => a.score - b.score);
+        }
+
+        res.status(200).json({
+            message: "Search completed",
+            results: results.map(r => ({
+                _id: r._id,
+                title: r.title,
+                author: r.author,
+                ...(r.similarity && { similarity: Math.round(r.similarity * 100) / 100 }),
+                ...(r.score && { score: r.score })
+            }))
+        });
+    } catch (error) {
+        console.error("Error in retrieve:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
 
 
 

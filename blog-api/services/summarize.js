@@ -2,7 +2,7 @@ const Groq = require("groq-sdk");
 const redis = require("redis");
 const crypto = require("crypto");
 
-const groq = new Groq({ apiKey: "your_groq_api_key" }); // Please replace with your GROQ API key.
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY }); 
 
 let redisClient;
 let redisEnabled = true;

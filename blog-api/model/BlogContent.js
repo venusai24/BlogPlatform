@@ -8,6 +8,9 @@ const blogcontentSchema = new Schema({
     summary: { type: String }, 
     tags: [String],
     likes: { type: Number, default: 0 },
+    titleEmbedding: { type: [Number], default: [] },
+    contentEmbedding: { type: [Number], default: [] },
+    summaryEmbedding: { type: [Number], default: [] },
     comments: [
         {
             user: String,
@@ -15,8 +18,8 @@ const blogcontentSchema = new Schema({
             timestamp: { type: Date, default: Date.now },
         },
     ],
-}, { timestamps: true }); // Automatically adds createdAt and updatedAt fields
+}, { timestamps: true });
 
-blogcontentSchema.index({ author: 1, title: 1 }, { unique: true }); // Compound index on author and title and allows different authors to have posts with the same title.
+blogcontentSchema.index({ author: 1, title: 1 }, { unique: true });
 
 module.exports = mongoose.model('BlogContent', blogcontentSchema);

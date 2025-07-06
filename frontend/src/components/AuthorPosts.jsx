@@ -16,16 +16,15 @@ const AuthorPosts = ({ username }) => {
           "http://localhost:5000/blogs/retrieve/author",
           { author: username }
         );
-
-        if (response.status === 400) {
+        setPosts(response.data.blogs);
+        setError(null);
+      } catch (err) {
+        if (err.response && err.response.status === 404) {
           setError("No blogs found for the given author.");
           setPosts([]);
         } else {
-          setPosts(response.data.blogs);
+          setError("Failed to fetch posts. Please try again later.");
         }
-        
-      } catch (err) {
-        setError("Failed to fetch posts. Please try again later.");
       } finally {
         setLoading(false);
       }
@@ -33,8 +32,6 @@ const AuthorPosts = ({ username }) => {
 
     fetchPosts();
   }, [username]);
-
-  
 
   if (loading) return <p className="text-center text-gray-500">Loading...</p>;
   if (error) return <p className="text-center text-red-500">{error}</p>;
@@ -64,9 +61,9 @@ const AuthorPosts = ({ username }) => {
             <Card
               className="shadow-lg rounded-2xl overflow-hidden bg-white hover:shadow-xl"
               onClick={() => {
-                console.log("C")
+                console.log("C");
                 navigate(`/blog/${post._id}`);
-            }}
+              }}
             >
               <CardContent className="p-4">
                 <h2 className="text-xl font-semibold text-gray-800 mb-2">
