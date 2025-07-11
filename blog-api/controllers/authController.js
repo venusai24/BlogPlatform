@@ -1,7 +1,8 @@
 const User = require('../model/User');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = "my_secret_key";
+require('dotenv').config(); // Ensure environment variables are loaded
+const JWT_SECRET = process.env.JWT_SECRET;
 
 exports.register = async (req, res) => {
     const { username, password } = req.body;
@@ -34,6 +35,7 @@ exports.login = async (req, res) => {
         if (!passwordIsValid) {
             return res.status(401).send({ message: "Invalid username or password" });
         }
+        console.log("JWT_SECRET:", process.env.JWT_SECRET); // Debugging line to check JWT_SECRET
         const token = jwt.sign({ userId: user._id, username: user.username }, JWT_SECRET, {
             expiresIn: '1h',
         });

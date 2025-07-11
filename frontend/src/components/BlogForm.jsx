@@ -13,8 +13,31 @@ function BlogForm() {
 
   const navigate = useNavigate();
 
+  // Helper function to check if user is logged in
+  const isLoggedIn = () => {
+    const token = localStorage.getItem("token");
+    const username = localStorage.getItem("username");
+    return token && username;
+  };
+
+  // Helper function to handle authentication errors
+  const handleAuthError = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    alert("Your session has expired. Please log in again.");
+    navigate("/login");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Check if user is logged in
+    if (!isLoggedIn()) {
+      alert("You must be logged in to post a blog. Please log in.");
+      navigate("/login");
+      return;
+    }
+
     const username = localStorage.getItem("username");
     const token = localStorage.getItem("token");
 
@@ -41,11 +64,21 @@ function BlogForm() {
         setSummary("");
       }
     } catch (error) {
-      if (error.response && error.response.status === 401) {
-        alert("You must be logged in to post a blog. Please log in again.");
-        navigate("/login");
+      console.error("Error posting blog:", error);
+      
+      if (error.response) {
+        const status = error.response.status;
+        const message = error.response.data?.message || "An error occurred";
+        
+        if (status === 401 || status === 403) {
+          handleAuthError();
+        } else if (status === 400) {
+          alert(`Error: ${message}`);
+        } else {
+          alert(`Server error: ${message}`);
+        }
       } else {
-        console.error("Error posting blog:", error);
+        alert("Network error. Please check your connection.");
       }
     }
   };

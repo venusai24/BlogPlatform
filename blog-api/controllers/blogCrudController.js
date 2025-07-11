@@ -2,13 +2,65 @@ const BlogContent = require('../model/BlogContent');
 const { generateEmbedding } = require('../services/embeddingService');
 
 exports.createBlog = async (req, res) => {
+    console.log("=== BLOG CREATION DEBUG START ===");
+    console.log("Request body:", JSON.stringify(req.body, null, 2));
+    
     const { title, content, author, summary } = req.body;
+    
+    // Validate input data
+    console.log("Extracted data:");
+    console.log("- title:", title, "type:", typeof title);
+    console.log("- content:", content, "type:", typeof content);
+    console.log("- author:", author, "type:", typeof author);
+    console.log("- summary:", summary, "type:", typeof summary);
+    
+    if (!title || !content || !author) {
+        console.error("Missing required fields");
+        return res.status(400).json({ message: "Title, content, and author are required" });
+    }
+    
     try {
+        console.log("Generating embeddings...");
+        
+        // Generate title embedding
+        console.log("Generating title embedding for:", title);
         const titleEmbedding = await generateEmbedding(title);
+        console.log("Title embedding result:", {
+            type: typeof titleEmbedding,
+            isArray: Array.isArray(titleEmbedding),
+            length: titleEmbedding ? titleEmbedding.length : 'N/A',
+            sample: titleEmbedding ? titleEmbedding.slice(0, 5) : 'N/A',
+            hasNaN: titleEmbedding ? titleEmbedding.some(isNaN) : 'N/A'
+        });
+        
+        // Generate content embedding
+        console.log("Generating content embedding for content length:", content.length);
         const contentEmbedding = await generateEmbedding(content);
-        const summaryEmbedding = summary ? await generateEmbedding(summary) : [];
+        console.log("Content embedding result:", {
+            type: typeof contentEmbedding,
+            isArray: Array.isArray(contentEmbedding),
+            length: contentEmbedding ? contentEmbedding.length : 'N/A',
+            sample: contentEmbedding ? contentEmbedding.slice(0, 5) : 'N/A',
+            hasNaN: contentEmbedding ? contentEmbedding.some(isNaN) : 'N/A'
+        });
+        
+        // Generate summary embedding if summary exists
+        let summaryEmbedding = [];
+        if (summary) {
+            console.log("Generating summary embedding for:", summary);
+            summaryEmbedding = await generateEmbedding(summary);
+            console.log("Summary embedding result:", {
+                type: typeof summaryEmbedding,
+                isArray: Array.isArray(summaryEmbedding),
+                length: summaryEmbedding ? summaryEmbedding.length : 'N/A',
+                sample: summaryEmbedding ? summaryEmbedding.slice(0, 5) : 'N/A',
+                hasNaN: summaryEmbedding ? summaryEmbedding.some(isNaN) : 'N/A'
+            });
+        } else {
+            console.log("No summary provided, using empty array for summaryEmbedding");
+        }
 
-        // Debug logs
+        // Debug logs (keeping original ones)
         console.log('title:', title);
         console.log('titleEmbedding:', titleEmbedding);
         console.log('content:', content);
@@ -19,13 +71,34 @@ exports.createBlog = async (req, res) => {
         console.log('typeof contentEmbedding:', typeof contentEmbedding, Array.isArray(contentEmbedding));
 
         // Validate embeddings
-        const isValidEmbedding = (arr) => Array.isArray(arr) && arr.length > 0 && arr.every((x) => typeof x === "number" && !isNaN(x));
-        if (!isValidEmbedding(titleEmbedding) || !isValidEmbedding(contentEmbedding)) {
-            console.error('Invalid embedding detected:', { titleEmbedding, contentEmbedding });
+        const isValidEmbedding = (arr) => {
+            console.log("Validating embedding:", {
+                isArray: Array.isArray(arr),
+                length: arr ? arr.length : 'N/A',
+                hasValidNumbers: arr ? arr.every((x) => typeof x === "number" && !isNaN(x)) : false
+            });
+            return Array.isArray(arr) && arr.length > 0 && arr.every((x) => typeof x === "number" && !isNaN(x));
+        };
+        
+        const titleValid = isValidEmbedding(titleEmbedding);
+        const contentValid = isValidEmbedding(contentEmbedding);
+        
+        console.log("Embedding validation results:");
+        console.log("- titleEmbedding valid:", titleValid);
+        console.log("- contentEmbedding valid:", contentValid);
+        
+        if (!titleValid || !contentValid) {
+            console.error('Invalid embedding detected:', { 
+                titleEmbedding: titleEmbedding, 
+                contentEmbedding: contentEmbedding,
+                titleValid,
+                contentValid
+            });
             return res.status(500).json({ message: "Embedding generation failed. Please try again." });
         }
 
-        const newPost = new BlogContent({
+        // Create blog post object
+        const blogData = {
             title,
             content,
             author,
@@ -33,13 +106,46 @@ exports.createBlog = async (req, res) => {
             titleEmbedding,
             contentEmbedding,
             summaryEmbedding
+        };
+        
+        console.log("Creating blog post with data:", {
+            title: blogData.title,
+            author: blogData.author,
+            contentLength: blogData.content.length,
+            summaryLength: blogData.summary ? blogData.summary.length : 0,
+            titleEmbeddingLength: blogData.titleEmbedding.length,
+            contentEmbeddingLength: blogData.contentEmbedding.length,
+            summaryEmbeddingLength: blogData.summaryEmbedding.length
         });
+
+        const newPost = new BlogContent(blogData);
+        
+        console.log("Blog post model created, attempting to save...");
         await newPost.save();
+        console.log("Blog post saved successfully with ID:", newPost._id);
+        
+        console.log("=== BLOG CREATION DEBUG END ===");
         res.status(201).json({ message: "Blog post created successfully", blog: newPost });
     } catch (error) {
+        console.error("=== BLOG CREATION ERROR ===");
+        console.error("Error details:", error);
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+        
         if (error.code === 11000) {
+            console.error("Duplicate key error:", error.keyValue);
             return res.status(400).json({ message: "A blog with this title already exists for the same author" });
         }
+        
+        // Check for MongoDB validation errors
+        if (error.name === 'ValidationError') {
+            console.error("MongoDB validation error:", error.errors);
+            return res.status(400).json({ 
+                message: "Validation error", 
+                errors: error.errors 
+            });
+        }
+        
         console.error('Blog creation error:', error);
         res.status(500).json({ message: "Server Error", error: error.message });
     }
