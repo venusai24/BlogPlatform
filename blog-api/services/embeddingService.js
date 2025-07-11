@@ -1,3 +1,4 @@
+require('dotenv').config();
 const Groq = require("groq-sdk");
 const redis = require("redis");
 const crypto = require("crypto");

@@ -7,15 +7,35 @@ function Summary({ content, title, setSummary }) {
 
   const fetchSummary = async () => {
     if (content.trim() === "") return;
-
     setIsLoading(true);
+    setLocalSummary("");
     try {
-      const response = await axios.post("http://localhost:5000/blogs/summarize", {
-        content,
-      });
-      const aiSummary = response.data.summary || "No summary available.";
-      setLocalSummary(aiSummary);
-      setSummary(aiSummary); // Pass the summary to the parent component
+      // Step 1: Request summarization job
+      const response = await axios.post("http://localhost:5000/blogs/summarize", { content });
+      const jobId = response.data.jobId;
+      if (!jobId) throw new Error("No jobId returned from server");
+      // Step 2: Poll for result
+      let attempts = 0;
+      let result = null;
+      while (attempts < 30) { // up to 60 seconds
+        await new Promise((r) => setTimeout(r, 2000));
+        const statusRes = await axios.get(`http://localhost:5000/blogs/summarize/status/${jobId}`);
+        if (statusRes.data.status === "completed") {
+          result = statusRes.data.summary;
+          break;
+        } else if (statusRes.data.status === "not_found") {
+          setLocalSummary("Summary job not found. Try again.");
+          setIsLoading(false);
+          return;
+        }
+        attempts++;
+      }
+      if (result) {
+        setLocalSummary(result);
+        setSummary(result);
+      } else {
+        setLocalSummary("No summary available (timeout).");
+      }
     } catch (error) {
       console.error("Error fetching summary:", error);
       setLocalSummary("Failed to fetch summary. Please try again.");
