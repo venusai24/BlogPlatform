@@ -244,10 +244,39 @@ const cosineSimilarity = (vec1, vec2) => {
   return dotProduct / (magnitude1 * magnitude2);
 };
 
+const generateSentenceSimilarityWithHuggingFace = async (sourceSentence, sentences) => {
+  try {
+    const response = await axios.post(
+      `https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2`,
+      {
+        inputs: {
+          source_sentence: sourceSentence,
+          sentences: sentences // array of strings
+        },
+        options: { wait_for_model: true }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+    // The response is an array of similarity scores
+    return response.data;
+  } catch (error) {
+    console.error("Hugging Face API error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+
 module.exports = {
   generateEmbedding,
   cosineSimilarity,
   generateEmbeddingWithOpenAI,
   generateEmbeddingWithHuggingFace,
-  generateEmbeddingWithLocalServer
+  generateEmbeddingWithLocalServer,
+  generateSentenceSimilarityWithHuggingFace
 };
