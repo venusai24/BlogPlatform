@@ -1,9 +1,15 @@
 require('dotenv').config();
-const Groq = require("groq-sdk");
 const redis = require("redis");
 const crypto = require("crypto");
+const axios = require("axios");
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// For local sentence transformers, you'll need to run a model server
+// Alternative: Use Hugging Face Inference API
+const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
+const MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"; // 384 dimensions
+// Alternative models:
+// "sentence-transformers/all-mpnet-base-v2" // 768 dimensions
+// "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" // 384 dimensions
 
 let redisClient;
 let redisEnabled = true;
@@ -22,9 +28,66 @@ let redisEnabled = true;
 const generateEmbeddingKey = (text) => 
   `embedding:${crypto.createHash("sha256").update(text).digest("hex")}`;
 
+// Generate embedding using Hugging Face Inference API
+const generateEmbeddingWithHuggingFace = async (text) => {
+  
+  try {
+    const response = await axios.post('https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2', {
+      inputs: text,
+      options: {
+        wait_for_model: true
+      }
+    }, {
+      headers: {
+        'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000 // 30 seconds timeout
+    });
+
+    // The response is typically a 2D array, we want the first (and usually only) embedding
+    const embedding = Array.isArray(response.data[0]) ? response.data[0] : response.data;
+    
+    if (!Array.isArray(embedding) || embedding.length === 0) {
+      throw new Error("Invalid embedding response from Hugging Face");
+    }
+
+    return embedding;
+  } catch (error) {
+    console.error("Hugging Face API error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Generate embedding using local sentence transformers server
+const generateEmbeddingWithLocalServer = async (text) => {
+  const LOCAL_SERVER_URL = process.env.EMBEDDING_SERVER_URL || 'http://localhost:8000';
+  
+  try {
+    const response = await axios.post(`${LOCAL_SERVER_URL}/embed`, {
+      text: text
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000
+    });
+
+    const embedding = response.data.embedding;
+    
+    if (!Array.isArray(embedding) || embedding.length === 0) {
+      throw new Error("Invalid embedding response from local server");
+    }
+
+    return embedding;
+  } catch (error) {
+    console.error("Local server error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 // Alternative: Use OpenAI embeddings (more accurate)
 const generateEmbeddingWithOpenAI = async (text) => {
-  // You'll need to install: npm install openai
   const { Configuration, OpenAIApi } = require("openai");
   
   const configuration = new Configuration({
@@ -45,10 +108,10 @@ const generateEmbeddingWithOpenAI = async (text) => {
   }
 };
 
-// Simple embedding using sentence transformers approach with Groq
+// Main embedding function using sentence transformers
 const generateEmbedding = async (text) => {
   console.log("=== EMBEDDING GENERATION DEBUG START ===");
-  console.log("Input text:", text);
+  console.log("Input text:", text ? text.substring(0, 100) + "..." : "N/A");
   console.log("Input text type:", typeof text);
   console.log("Input text length:", text ? text.length : 'N/A');
   
@@ -58,9 +121,15 @@ const generateEmbedding = async (text) => {
     throw new Error("Invalid input text for embedding generation");
   }
 
-  const embeddingKey = generateEmbeddingKey(text);
+  // Clean and truncate text if too long
+  const cleanText = text.trim();
+  const maxLength = 512; // Most sentence transformers work best with shorter texts
+  const truncatedText = cleanText.length > maxLength ? cleanText.substring(0, maxLength) : cleanText;
+  
+  const embeddingKey = generateEmbeddingKey(truncatedText);
   console.log("Generated embedding key:", embeddingKey);
   
+  // Check Redis cache first
   if (redisEnabled) {
     try {
       const cached = await redisClient.get(embeddingKey);
@@ -68,7 +137,7 @@ const generateEmbedding = async (text) => {
         console.log("Found cached embedding");
         const parsedCached = JSON.parse(cached);
         console.log("Cached embedding length:", parsedCached.length);
-        console.log("Cached embedding sample:", parsedCached.slice(0, 5));
+        console.log("=== EMBEDDING GENERATION DEBUG END (CACHED) ===");
         return parsedCached;
       }
     } catch (error) {
@@ -79,93 +148,50 @@ const generateEmbedding = async (text) => {
   console.log("No cached embedding found, generating new one...");
 
   try {
-    // Use Groq to generate a semantic representation
-    const groqRequest = {
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "system",
-          content: "You are a semantic analyzer. Generate a comma-separated list of exactly 384 numerical values between -1 and 1 that represent the semantic meaning of the given text. Focus on key concepts, themes, and meaning. Return ONLY the comma-separated numbers, no other text or formatting."
-        },
-        {
-          role: "user",
-          content: `Generate semantic embedding for: ${text.substring(0, 2000)}`
-        }
-      ],
-      max_tokens: 1000,
-      temperature: 0.1,
-    };
-
-    console.log("Groq request:", JSON.stringify(groqRequest, null, 2));
-
-    const response = await groq.chat.completions.create(groqRequest);
+    let embedding;
     
-    console.log("Groq response:", JSON.stringify(response, null, 2));
-    
-    const embeddingText = response.choices[0].message?.content?.trim();
-    console.log("Raw embedding text from Groq:", embeddingText);
-    console.log("Embedding text type:", typeof embeddingText);
-    console.log("Embedding text length:", embeddingText ? embeddingText.length : 'N/A');
-    
-    if (!embeddingText) {
-      console.error("No embedding text received from Groq");
-      throw new Error("No embedding text received from Groq");
+    // Try different embedding services in order of preference
+    if (HUGGINGFACE_API_KEY) {
+      console.log("Using Hugging Face API for embedding generation");
+      embedding = await generateEmbeddingWithHuggingFace(truncatedText);
+    } else if (process.env.EMBEDDING_SERVER_URL) {
+      console.log("Using local sentence transformers server");
+      embedding = await generateEmbeddingWithLocalServer(truncatedText);
+    } else if (process.env.OPENAI_API_KEY) {
+      console.log("Using OpenAI API for embedding generation");
+      embedding = await generateEmbeddingWithOpenAI(truncatedText);
+    } else {
+      throw new Error("No embedding service configured. Please set HUGGINGFACE_API_KEY, EMBEDDING_SERVER_URL, or OPENAI_API_KEY");
     }
-
-    // Split and parse the embedding
-    const embeddingStrings = embeddingText.split(',');
-    console.log("Split embedding strings count:", embeddingStrings.length);
-    console.log("First 10 embedding strings:", embeddingStrings.slice(0, 10));
     
-    const embedding = embeddingStrings.map((num, index) => {
-      const trimmed = num.trim();
-      const parsed = parseFloat(trimmed);
-      if (isNaN(parsed)) {
-        console.error(`Invalid number at index ${index}: "${trimmed}"`);
-      }
-      return parsed;
-    }).slice(0, 384);
+    console.log("Generated embedding length:", embedding.length);
+    console.log("First 5 embedding values:", embedding.slice(0, 5));
     
-    console.log("Parsed embedding length:", embedding.length);
-    console.log("First 10 parsed values:", embedding.slice(0, 10));
-    console.log("NaN count in embedding:", embedding.filter(isNaN).length);
-    console.log("Valid numbers count:", embedding.filter(x => !isNaN(x)).length);
-    
-    // Check for NaN values
-    const hasNaN = embedding.some(isNaN);
+    // Validate embedding
+    const hasNaN = embedding.some(val => isNaN(val) || !isFinite(val));
     if (hasNaN) {
-      console.error("Embedding contains NaN values!");
-      console.error("NaN indices:", embedding.map((val, idx) => isNaN(val) ? idx : null).filter(x => x !== null));
-      throw new Error("Generated embedding contains NaN values");
+      console.error("Embedding contains invalid values!");
+      throw new Error("Generated embedding contains invalid values");
     }
     
-    // Normalize the embedding
+    // Ensure embedding is normalized (for cosine similarity)
     const magnitudeSquared = embedding.reduce((sum, val) => sum + val * val, 0);
-    console.log("Magnitude squared:", magnitudeSquared);
-    
-    if (magnitudeSquared === 0) {
-      console.error("Zero magnitude embedding detected");
-      throw new Error("Zero magnitude embedding");
-    }
-    
     const magnitude = Math.sqrt(magnitudeSquared);
-    console.log("Magnitude:", magnitude);
     
-    const normalizedEmbedding = embedding.map(val => val / magnitude);
-    console.log("Normalized embedding length:", normalizedEmbedding.length);
-    console.log("First 10 normalized values:", normalizedEmbedding.slice(0, 10));
-    console.log("NaN count in normalized embedding:", normalizedEmbedding.filter(isNaN).length);
-
-    // Final validation
-    const isValidEmbedding = normalizedEmbedding.length === 384 && 
-                           normalizedEmbedding.every(x => typeof x === "number" && !isNaN(x));
-    console.log("Is valid embedding:", isValidEmbedding);
-
-    if (!isValidEmbedding) {
-      console.error("Final embedding validation failed");
-      throw new Error("Final embedding validation failed");
+    let normalizedEmbedding;
+    if (magnitude === 0) {
+      console.warn("Zero magnitude embedding detected, using random normalized embedding");
+      normalizedEmbedding = Array.from({length: embedding.length}, () => (Math.random() - 0.5) * 2);
+      const randomMagnitude = Math.sqrt(normalizedEmbedding.reduce((sum, val) => sum + val * val, 0));
+      normalizedEmbedding = normalizedEmbedding.map(val => val / randomMagnitude);
+    } else {
+      normalizedEmbedding = embedding.map(val => val / magnitude);
     }
+    
+    console.log("Normalized embedding length:", normalizedEmbedding.length);
+    console.log("Magnitude:", magnitude);
 
+    // Cache the normalized embedding
     if (redisEnabled) {
       try {
         await redisClient.set(embeddingKey, JSON.stringify(normalizedEmbedding), { EX: 86400 });
@@ -177,6 +203,7 @@ const generateEmbedding = async (text) => {
 
     console.log("=== EMBEDDING GENERATION DEBUG END ===");
     return normalizedEmbedding;
+    
   } catch (error) {
     console.error("Error generating embedding:", error);
     console.error("Error stack:", error.stack);
@@ -188,7 +215,6 @@ const generateEmbedding = async (text) => {
     const fallbackEmbedding = randomEmbedding.map(val => val / magnitude);
     
     console.log("Fallback embedding generated, length:", fallbackEmbedding.length);
-    console.log("Fallback embedding sample:", fallbackEmbedding.slice(0, 5));
     
     return fallbackEmbedding;
   }
@@ -196,11 +222,24 @@ const generateEmbedding = async (text) => {
 
 // Calculate cosine similarity between two embeddings
 const cosineSimilarity = (vec1, vec2) => {
-  if (vec1.length !== vec2.length) return 0;
+  if (!Array.isArray(vec1) || !Array.isArray(vec2)) {
+    console.error("Invalid vectors for cosine similarity");
+    return 0;
+  }
+  
+  if (vec1.length !== vec2.length) {
+    console.error("Vector length mismatch:", vec1.length, "vs", vec2.length);
+    return 0;
+  }
   
   const dotProduct = vec1.reduce((sum, val, i) => sum + val * vec2[i], 0);
   const magnitude1 = Math.sqrt(vec1.reduce((sum, val) => sum + val * val, 0));
   const magnitude2 = Math.sqrt(vec2.reduce((sum, val) => sum + val * val, 0));
+  
+  if (magnitude1 === 0 || magnitude2 === 0) {
+    console.error("Zero magnitude vector detected");
+    return 0;
+  }
   
   return dotProduct / (magnitude1 * magnitude2);
 };
@@ -208,5 +247,7 @@ const cosineSimilarity = (vec1, vec2) => {
 module.exports = {
   generateEmbedding,
   cosineSimilarity,
-  generateEmbeddingWithOpenAI
+  generateEmbeddingWithOpenAI,
+  generateEmbeddingWithHuggingFace,
+  generateEmbeddingWithLocalServer
 };

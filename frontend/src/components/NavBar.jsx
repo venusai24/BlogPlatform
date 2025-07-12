@@ -246,10 +246,11 @@ const NavBar = ({ onSearchResults }) => {
             </div>
             <div className="space-y-2">
               {searchResults.slice(0, 5).map((result, index) => (
-                <div 
-                  key={result._id || index} 
-                  className="p-2 hover:bg-gray-50 rounded border-l-2 border-transparent hover:border-blue-500 cursor-pointer"
-                >
+                <Link 
+                  to={`/blog/${result._id}`} 
+                  key={result._id || index}
+                  className="block p-2 hover:bg-gray-50 rounded border-l-2 border-transparent hover:border-blue-500"
+          >
                   <div className="font-medium text-sm">{result.title}</div>
                   <div className="text-xs text-gray-500">
                     by {result.author}
@@ -260,7 +261,7 @@ const NavBar = ({ onSearchResults }) => {
                       </span>
                     )}
                   </div>
-                </div>
+                </Link>
               ))}
               {searchResults.length > 5 && (
                 <div className="text-xs text-gray-500 text-center pt-2">
