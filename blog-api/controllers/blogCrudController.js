@@ -161,6 +161,38 @@ exports.getAllBlogs = async (req, res) => {
     }
 };
 
+// NEW: Get blog by ID
+exports.getBlogById = async (req, res) => {
+    const { id } = req.params;
+    
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+        return res.status(400).json({ message: "Invalid blog ID format" });
+    }
+    
+    try {
+        const blog = await BlogContent.findById(id).select("title author content summary");
+
+        if (!blog) {
+            return res.status(404).json({ message: "Blog post not found" });
+        }
+
+        res.status(200).json({
+            message: "Blog post retrieved successfully",
+            blog: {
+                title: blog.title,
+                author: blog.author,
+                content: blog.content,
+                summary: blog.summary
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching blog by ID:', error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+
 exports.getBlogIdByTitleAuthor = async (req, res) => {
     const { author, title } = req.query;
     if (!author || !title) {
@@ -180,11 +212,11 @@ exports.getBlogIdByTitleAuthor = async (req, res) => {
 
 exports.updateBlog = async (req, res) => {
     const { id } = req.params;
-    const { title, content, tags } = req.body;
+    const { title, content, tags, summary } = req.body;
     try {
         const updatedBlog = await BlogContent.findByIdAndUpdate(
             id,
-            { title, content, tags },
+            { title, content, tags, summary },
             { new: true, runValidators: true }
         );
         if (!updatedBlog) {
