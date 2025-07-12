@@ -213,18 +213,56 @@ exports.getBlogIdByTitleAuthor = async (req, res) => {
 exports.updateBlog = async (req, res) => {
     const { id } = req.params;
     const { title, content, tags, summary } = req.body;
+
     try {
-        const updatedBlog = await BlogContent.findByIdAndUpdate(
-            id,
-            { title, content, tags, summary },
-            { new: true, runValidators: true }
-        );
-        if (!updatedBlog) {
+        const blog = await BlogContent.findById(id);
+        if (!blog) {
             return res.status(404).json({ message: "Blog post not found" });
         }
+
+        // Determine if embeddings need to be regenerated
+        const updates = {};
+        if (title && title !== blog.title) {
+            console.log("Title updated. Regenerating title embedding...");
+            const titleEmbedding = await generateEmbedding(title);
+            updates.titleEmbedding = titleEmbedding;
+            updates.title = title;
+        }
+
+        if (content && content !== blog.content) {
+            console.log("Content updated. Regenerating content embedding...");
+            const contentEmbedding = await generateEmbedding(content);
+            updates.contentEmbedding = contentEmbedding;
+            updates.content = content;
+        }
+
+        if (summary !== undefined && summary !== blog.summary) {
+            console.log("Summary updated. Regenerating summary embedding...");
+            updates.summary = summary;
+
+            if (summary) {
+                const summaryEmbedding = await generateEmbedding(summary);
+                updates.summaryEmbedding = summaryEmbedding;
+            } else {
+                updates.summaryEmbedding = [];
+            }
+        }
+
+        if (tags) {
+            updates.tags = tags;
+        }
+
+        console.log("Applying updates to blog post:", updates);
+
+        const updatedBlog = await BlogContent.findByIdAndUpdate(
+            id,
+            updates,
+            { new: true, runValidators: true }
+        );
+
         res.status(200).json({ message: "Blog post updated successfully", blog: updatedBlog });
     } catch (error) {
-        console.error(error);
+        console.error("Error updating blog post:", error);
         res.status(500).json({ message: "Server error" });
     }
 };
