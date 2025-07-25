@@ -30,7 +30,7 @@ const BlogContent = require('../model/BlogContent');
 const { generateSentenceSimilarityWithHuggingFace} = require('../services/embeddingService');
 const redisClient = require('../services/redisClient');
 
-exports.semanticSearch = async (req, res) => {
+exports.semanticSearchbyTitle = async (req, res) => {
   const { query, limit = 10, threshold = 0.3 } = req.body;
 
   if (!query) {

@@ -6,23 +6,18 @@ const crypto = require("crypto");
 require('dotenv').config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY }); 
-const redisEnabled = true; // or set based on your config if needed
+const redisEnabled = true; 
 
-// Preprocess text: remove boilerplate, deduplicate, normalize whitespace
 function preprocessText(text) {
-    // Remove repeated paragraphs
     const paragraphs = text.split(/\n+/).map(p => p.trim()).filter(Boolean);
     const uniqueParagraphs = [...new Set(paragraphs)];
-    // Remove boilerplate (customize as needed)
     const filtered = uniqueParagraphs.filter(p => !/copyright|footer|all rights reserved/i.test(p));
-    // Normalize whitespace
     return filtered.join('\n').replace(/\s+/g, ' ').trim();
 }
 
-// Semantic cache lookup
+
 async function getSemanticCachedSummary(text, threshold = 0.95) {
     const newEmbedding = await generateEmbedding(text);
-    // Scan Redis for all summary embeddings (for demo, use a fixed set or store keys in a set)
     const keys = await redisClient.keys('summary-embedding:*');
     for (const key of keys) {
         const cached = await redisClient.get(key);
@@ -36,7 +31,6 @@ async function getSemanticCachedSummary(text, threshold = 0.95) {
     return null;
 }
 
-// Store semantic cache
 async function setSemanticCachedSummary(text, summary, embedding) {
     const key = `summary-embedding:${crypto.createHash('sha256').update(text).digest('hex')}`;
     await redisClient.set(key, JSON.stringify({ embedding, summary }), { EX: 86400 });
@@ -80,27 +74,38 @@ const chunkTextWithParagraphs = (text, maxWords) => {
   return chunks;
 };
 
-// Improved: Adaptive chunking using sentence boundaries
-function adaptiveChunkText(text, maxWords) {
-    const sentences = text.match(/[^.!?\n]+[.!?\n]+/g) || [text];
-    const chunks = [];
-    let currentChunk = [];
-    let currentWordCount = 0;
-    for (const sentence of sentences) {
-        const wordCount = sentence.split(/\s+/).length;
-        if (currentWordCount + wordCount > maxWords && currentChunk.length > 0) {
-            chunks.push(currentChunk.join(' '));
-            currentChunk = [sentence];
-            currentWordCount = wordCount;
-        } else {
-            currentChunk.push(sentence);
-            currentWordCount += wordCount;
+function adaptiveChunkText(text, maxWords = 200, overlapWords = 20) {
+  const paragraphs = text.split(/\n\s*\n/);
+  const chunks = [];
+
+  for (const para of paragraphs) {
+    const words = para.trim().split(/\s+/);
+
+    if (words.length <= maxWords) {
+      chunks.push(para.trim());
+    } else {
+      const sentences = para.match(/[^.!?]+[.!?]*/g) || [para];
+      let buffer = [];
+      let wordCount = 0;
+
+      for (const sentence of sentences) {
+        const sentenceWords = sentence.trim().split(/\s+/).length;
+
+        if (wordCount + sentenceWords > maxWords) {
+          chunks.push(buffer.join(' ').trim());
+          buffer = buffer.slice(-overlapWords); 
+          wordCount = buffer.join(' ').split(/\s+/).length;
         }
+
+        buffer.push(sentence);
+        wordCount += sentenceWords;
+      }
+
+      if (buffer.length > 0) chunks.push(buffer.join(' ').trim());
     }
-    if (currentChunk.length > 0) {
-        chunks.push(currentChunk.join(' '));
-    }
-    return chunks;
+  }
+
+  return chunks;
 }
 
 const summarizeChunk = async (chunk, compressionRatio, model = "llama-3.3-70b-versatile") => {
@@ -176,11 +181,9 @@ const summarizeText = async (text, model = "llama-3.3-70b-versatile") => {
   return finalResult;
 };
 
-// Main summarization function (async job)
-// Add batch support to summarizeJob
+
 async function summarizeJob({ text, model }) {
     if (Array.isArray(text)) {
-        // Batch mode: summarize each item
         const results = [];
         for (const t of text) {
             const preprocessed = preprocessText(t);
@@ -197,7 +200,6 @@ async function summarizeJob({ text, model }) {
         }
         return results;
     } else {
-        // Single text
         const preprocessed = preprocessText(text);
         const semanticCached = await getSemanticCachedSummary(preprocessed);
         if (semanticCached) return semanticCached;
@@ -209,21 +211,18 @@ async function summarizeJob({ text, model }) {
     }
 }
 
-// Model selection based on text length
 function selectModel(text) {
     const wordCount = text.split(/\s+/).length;
-    if (wordCount < 300) return 'mistral-7b'; // Example: use lighter model for short text
+    if (wordCount < 300) return 'mistral-7b'; 
     if (wordCount < 1000) return 'llama-3-8b';
-    return 'llama-3.3-70b-versatile'; // Default heavy model
+    return 'llama-3.3-70b-versatile'; 
 }
 
-// Add job to queue
 async function queueSummarization(text, model = "llama-3.3-70b-versatile") {
     const job = await summarizeQueue.add('summarize', { text, model });
     return job.id;
 }
 
-// Get job status/result
 async function getSummarizationStatus(jobId) {
     const job = await summarizeQueue.getJob(jobId);
     if (!job) return { status: 'not_found' };

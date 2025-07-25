@@ -82,7 +82,7 @@ const NavBar = ({ onSearchResults }) => {
         onSearchResults(transformedResults);
       } else {
         // Use title-based search
-        response = await axios.post("http://localhost:5000/blogs/retrieve", {
+        response = await axios.post("http://localhost:5000/blogs/semanticSearchbyTitle", {
           titleQuery: query,
         });
         
