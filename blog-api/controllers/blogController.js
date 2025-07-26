@@ -58,7 +58,6 @@ exports.semanticSearchbyTitle = async (req, res) => {
       _id: blog._id,
       title: blog.title,
       author: blog.author,
-      summary: blog.summary,
       similarity: scores[idx],
       createdAt: blog.createdAt
     }))
@@ -73,7 +72,6 @@ exports.semanticSearchbyTitle = async (req, res) => {
         _id: r._id,
         title: r.title,
         author: r.author,
-        summary: r.summary,
         similarity: Math.round(r.similarity * 100) / 100,
         createdAt: r.createdAt
       }))

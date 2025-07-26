@@ -2,6 +2,8 @@ require('dotenv').config();
 const redis = require("redis");
 const crypto = require("crypto");
 const axios = require("axios");
+const { pipeline } = require('@xenova/transformers');
+
 
 // For local sentence transformers, you'll need to run a model server
 // Alternative: Use Hugging Face Inference API
@@ -13,6 +15,25 @@ const MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"; // 384 dimensions
 
 let redisClient;
 let redisEnabled = true;
+
+let embeddingModel = null;
+
+const initializeModel = async () => {
+  if (!embeddingModel) {
+    try {
+      embeddingModel = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
+        revision: 'main',
+        quantized: false
+      });
+    } catch (error) {
+      console.error('Failed to initialize model:', error);
+      // Fallback to direct API calls if local model fails
+      embeddingModel = null;
+      throw error;
+    }
+  }
+  return embeddingModel;
+};
 
 (async () => {
   try {
@@ -30,31 +51,50 @@ const generateEmbeddingKey = (text) =>
 
 // Generate embedding using Hugging Face Inference API
 const generateEmbeddingWithHuggingFace = async (text) => {
-  
   try {
-    const response = await axios.post('https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2', {
-      inputs: text,
-      options: {
-        wait_for_model: true
+    // First try using local model
+    try {
+      const model = await initializeModel();
+      const embeddings = await model(text, { 
+        pooling: 'mean', 
+        normalize: true 
+      });
+      return Array.from(embeddings.data);
+    } catch (localError) {
+      console.log('Local model failed, falling back to API:', localError.message);
+      
+      // Fallback to API if local model fails
+      const response = await axios.post(
+        `https://api-inference.huggingface.co/models/${MODEL_NAME}`,
+        {
+          inputs: text,
+          options: { wait_for_model: true }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+
+      if (!response.data || !Array.isArray(response.data) || !response.data[0]) {
+        throw new Error('Invalid response format from Hugging Face API');
       }
-    }, {
-      headers: {
-        'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 30000 // 30 seconds timeout
-    });
 
-    // The response is typically a 2D array, we want the first (and usually only) embedding
-    const embedding = Array.isArray(response.data[0]) ? response.data[0] : response.data;
-    
-    if (!Array.isArray(embedding) || embedding.length === 0) {
-      throw new Error("Invalid embedding response from Hugging Face");
+      // Extract the actual embedding array from nested structure
+      const embedding = response.data[0];
+      if (Array.isArray(embedding)) {
+        return embedding;
+      } else if (Array.isArray(embedding.data)) {
+        return embedding.data;
+      }
+
+      throw new Error('Unexpected embedding format from API');
     }
-
-    return embedding;
   } catch (error) {
-    console.error("Hugging Face API error:", error.response?.data || error.message);
+    console.error('Error generating embedding:', error);
     throw error;
   }
 };
@@ -168,10 +208,32 @@ const generateEmbedding = async (text) => {
     console.log("First 5 embedding values:", embedding.slice(0, 5));
     
     // Validate embedding
-    const hasNaN = embedding.some(val => isNaN(val) || !isFinite(val));
-    if (hasNaN) {
-      console.error("Embedding contains invalid values!");
-      throw new Error("Generated embedding contains invalid values");
+    const validateEmbedding = (embedding) => {
+      if (!Array.isArray(embedding)) {
+        console.error("Embedding is not an array");
+        return false;
+      }
+
+      if (embedding.length === 0) {
+        console.error("Embedding array is empty");
+        return false;
+      }
+
+      // Check if any value is NaN or non-finite
+      const hasInvalidValues = embedding.some(val => 
+        typeof val !== 'number' || isNaN(val) || !isFinite(val)
+      );
+
+      if (hasInvalidValues) {
+        console.error("Embedding contains invalid numerical values");
+        return false;
+      }
+
+      return true;
+    };
+
+    if (!validateEmbedding(embedding)) {
+      throw new Error("Invalid embedding format or values");
     }
     
     // Ensure embedding is normalized (for cosine similarity)

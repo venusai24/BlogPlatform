@@ -239,5 +239,6 @@ module.exports = Object.assign(summarizeText, {
     preprocessText,
     getSemanticCachedSummary,
     setSemanticCachedSummary,
-    selectModel
+    selectModel,
+    adaptiveChunkText
 });

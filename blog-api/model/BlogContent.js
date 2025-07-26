@@ -8,9 +8,6 @@ const blogcontentSchema = new Schema({
     summary: { type: String }, 
     tags: [String],
     likes: { type: Number, default: 0 },
-    titleEmbedding: { type: [Number], default: [] },
-    contentEmbedding: { type: [Number], default: [] },
-    summaryEmbedding: { type: [Number], default: [] },
     comments: [
         {
             user: String,
