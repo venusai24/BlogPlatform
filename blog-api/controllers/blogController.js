@@ -2,11 +2,15 @@ const summarizeService = require('../services/summarize');
 
 exports.summarize = async (req, res) => {
     const { content, model } = req.body;
+    console.log('Received summarize request:', { content, model });
     if (!content) {
+        console.log('Content is missing in request body');
         return res.status(400).json({ message: 'Content is required' });
     }
     try {
+        console.log("Queueing summarization job...");
         const jobId = await summarizeService.queueSummarization(content, model);
+        console.log('Summarization job queued with jobId:', jobId);
         res.status(202).json({ message: 'Summarization job queued', jobId });
     } catch (error) {
         console.error('Error queueing summarization:', error);
@@ -16,8 +20,11 @@ exports.summarize = async (req, res) => {
 
 exports.summarizeStatus = async (req, res) => {
     const { jobId } = req.params;
+    console.log('Received summarizeStatus request for jobId:', jobId);
     try {
+        console.log("Fetching summarization status...");
         const status = await summarizeService.getSummarizationStatus(jobId);
+        console.log('Summarization status fetched:', status);
         res.status(200).json(status);
     } catch (error) {
         console.error('Error fetching summarization status:', error);

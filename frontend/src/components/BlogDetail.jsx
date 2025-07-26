@@ -13,6 +13,13 @@ function BlogDetail() {
   const [editSummary, setEditSummary] = useState('');
   const [editTitle, setEditTitle] = useState('');
   const [editTags, setEditTags] = useState('');
+  const [currentUser, setCurrentUser] = useState(localStorage.getItem('username'));
+
+  // Function to check if current user is the author
+  const isAuthor = () => {
+    if (!currentUser || !blog) return false;
+    return currentUser === blog.author;
+  };
 
   const handleSearchResults = (results) => {
     setBlogs(results); 
@@ -159,19 +166,24 @@ function BlogDetail() {
                 <p className="whitespace-pre-wrap">{blog.content}</p>
 
                 <div className="mt-6 flex gap-4">
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600"
-                  >
-                    Edit Blog
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-                  >
-                    Delete Blog
-                  </button>
-                </div>
+  <button
+    onClick={() => setIsEditing(true)}
+    disabled={!isAuthor()}
+    className={`px-4 py-2 rounded text-white 
+      ${isAuthor() ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-gray-400 cursor-not-allowed'}`}
+  >
+    Edit Blog
+  </button>
+  <button
+    onClick={handleDelete}
+    disabled={!isAuthor()}
+    className={`px-4 py-2 rounded text-white 
+      ${isAuthor() ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-400 cursor-not-allowed'}`}
+  >
+    Delete Blog
+  </button>
+</div>
+
               </>
             )}
           </div>

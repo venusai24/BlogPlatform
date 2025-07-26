@@ -63,14 +63,10 @@ const NavBar = ({ onSearchResults }) => {
       
       if (searchType === "semantic") {
         // Use semantic search
-        const token = localStorage.getItem('token'); // Get stored auth token
         response = await axios.get("http://localhost:5000/blogs/search", {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
           params: {
             query: query,
-            searchType: 'hybrid',
+            searchType: 'content',
             limit: 10
           }
         });
@@ -89,11 +85,21 @@ const NavBar = ({ onSearchResults }) => {
       } else {
         // Use title-based search
         response = await axios.post("http://localhost:5000/blogs/semanticSearchbyTitle", {
-          titleQuery: query,
+          query: query,
         });
         
-        setSearchResults(response.data);
-        onSearchResults(response.data);
+        // Transform title search results to match the semantic search format
+        const transformedResults = response.data.results.map(result => ({
+          _id: result._id,
+          title: result.title,
+          author: result.author || 'Unknown',
+          similarity: result.similarity,
+          createdAt: result.createdAt,
+          matchField: 'title'
+        }));
+        
+        setSearchResults(transformedResults);
+        onSearchResults(transformedResults);
       }
     } catch (error) {
       console.error("Error fetching search results:", error);
@@ -258,13 +264,20 @@ const NavBar = ({ onSearchResults }) => {
                   className="block p-2 hover:bg-gray-50 rounded border-l-2 border-transparent hover:border-blue-500"
           >
                   <div className="font-medium text-sm">{result.title}</div>
-                  <div className="text-xs text-gray-500">
-                    by {result.author}
-                    {searchType === "semantic" && result.similarity && (
-                      <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                        {Math.round(result.similarity * 100)}% match
-                        {result.matchField && ` (${result.matchField})`}
-                      </span>
+                  <div className="text-xs text-gray-500 flex justify-between items-center">
+                    <div>
+                      by {result.author}
+                      {result.similarity && (
+                        <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                          {Math.round(result.similarity * 100)}% match
+                          {result.matchField && ` (${result.matchField})`}
+                        </span>
+                      )}
+                    </div>
+                    {result.createdAt && (
+                      <div className="text-xs text-gray-400">
+                        {new Date(result.createdAt).toLocaleDateString()}
+                      </div>
                     )}
                   </div>
                 </Link>

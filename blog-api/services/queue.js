@@ -6,6 +6,8 @@ const connection = {
     password: process.env.REDIS_PASSWORD
 };
 
+
 const summarizeQueue = new Queue('summarize', { connection });
+
 
 module.exports = summarizeQueue;

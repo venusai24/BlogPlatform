@@ -31,7 +31,8 @@ const indexBlogPost = async (blog) => {
             blogId: blog._id.toString(),
             type: 'title',
             title: blog.title,
-            snippet: blog.content.substring(0, 200)
+            snippet: blog.content.substring(0, 200),
+            author: blog.author // Include author in payload
           }
         },
         {
@@ -41,7 +42,8 @@ const indexBlogPost = async (blog) => {
             blogId: blog._id.toString(),
             type: 'content',
             title: blog.title,
-            content: blog.content
+            content: blog.content,
+            author: blog.author // Include author in payload
           }
         }
       ]
@@ -170,7 +172,8 @@ const searchBlogs = async (query, options = {}) => {
         id: match.payload.blogId,
         score: match.score,
         title: match.payload.title,
-        snippet: match.payload.snippet || match.payload.content?.substring(0, 200)
+        snippet: match.payload.snippet || match.payload.content?.substring(0, 200),
+        author: match.payload.author // Extract author from payload
       };
     }).filter(Boolean); // Remove any null results
 

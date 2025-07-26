@@ -3,7 +3,6 @@ const semanticSearchService = require('../services/semanticSearchService');
 
 exports.createBlog = async (req, res) => {
     const { title, content, author, summary, tags } = req.body;
-    // ... (validation logic is fine)
 
     try {
         const newPost = new BlogContent({ title, content, author, summary, tags });
@@ -12,13 +11,10 @@ exports.createBlog = async (req, res) => {
         try {
             // FIX: Call the correct service and method, passing the full object
             await semanticSearchService.indexBlogPost(newPost);
-            console.log('[BlogCrudController] Blog indexed in Pinecone:', newPost._id);
         } catch (err) {
-            console.error('[BlogCrudController] Failed to index blog in Pinecone:', err);
         }
         res.status(201).json({ message: "Blog post created successfully", blog: newPost });
     } catch (error) {
-        // ... (error handling is fine)
         res.status(500).json({ message: "Server Error", error: error.message });
     }
 };

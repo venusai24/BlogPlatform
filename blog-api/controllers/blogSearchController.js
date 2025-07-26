@@ -3,8 +3,7 @@ const semanticSearchService = require('../services/semanticSearchService');
 class BlogSearchController {
     async searchBlogs(req, res) {
         try {
-            const { query, searchType = 'hybrid', limit = 10 } = req.query;
-            const userId = req.user.id; // Get authenticated user's ID
+            const { query, searchType = 'content', limit = 10 } = req.query;
 
             if (!query) {
                 return res.status(400).json({ error: 'Search query is required' });
@@ -13,11 +12,11 @@ class BlogSearchController {
             const searchOptions = {
                 limit: parseInt(limit),
                 searchType,
-                minScore: 0.3, // Lowered threshold for better recall
-                userId // Pass user ID for potential personalization
+                minScore: 0.2 // Lowered threshold for better recall
             };
 
             const results = await semanticSearchService.searchBlogs(query, searchOptions);
+            console.log(results);
             
             // Format results with consistent structure
             const formattedResults = results.map(result => ({
@@ -25,7 +24,7 @@ class BlogSearchController {
                 title: result.title,
                 snippet: result.snippet,
                 score: result.score,
-                author: result.author
+                author: result.author // Include author in response
             }));
             
             res.json(formattedResults);
