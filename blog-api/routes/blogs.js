@@ -19,17 +19,17 @@ mongoose.connection.once('open', () => {
 
 // CRUD endpoints
 
-blogrouter.post('/', blogCrudController.createBlog);
 blogrouter.get('/', blogCrudController.getAllBlogs);
 blogrouter.get('/getid', blogCrudController.getBlogIdByTitleAuthor);
 blogrouter.post('/retrieve', blogRetrievalController.retrieveBlogsByTitle);
 blogrouter.post('/summarize', blogController.summarize);
 blogrouter.get('/summarize/status/:jobId', blogController.summarizeStatus);
 blogrouter.post('/semanticSearchbyTitle', blogController.semanticSearchbyTitle);
-blogrouter.get('/search', blogSearchController.searchBlogs);
+blogrouter.get('/search', authenticateToken, blogSearchController.searchBlogs);
 blogrouter.get('/:id', blogCrudController.getBlogById);
-blogrouter.put('/:id', blogCrudController.updateBlog);
-blogrouter.delete('/:id', blogCrudController.deleteBlog);
+blogrouter.post('/', authenticateToken, blogCrudController.createBlog);
+blogrouter.put('/:id', authenticateToken, blogCrudController.updateBlog);
+blogrouter.delete('/:id', authenticateToken, blogCrudController.deleteBlog);
 
 module.exports = blogrouter;
 

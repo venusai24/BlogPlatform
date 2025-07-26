@@ -63,19 +63,25 @@ const NavBar = ({ onSearchResults }) => {
       
       if (searchType === "semantic") {
         // Use semantic search
-        response = await axios.post("http://localhost:5000/blogs/semantic-search", {
-          query: query,
-          limit: 10,
-          threshold: 0.3
+        const token = localStorage.getItem('token'); // Get stored auth token
+        response = await axios.get("http://localhost:5000/blogs/search", {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          params: {
+            query: query,
+            searchType: 'hybrid',
+            limit: 10
+          }
         });
         
-        // Transform semantic search results to match expected format
-        const transformedResults = response.data.results.map(result => ({
-          _id: result._id,
+        // Use the simplified response format directly
+        const transformedResults = response.data.map(result => ({
+          _id: result.id,
           title: result.title,
-          author: result.author,
-          similarity: result.similarity,
-          matchField: result.matchField
+          author: result.author || 'Unknown',
+          similarity: result.score,
+          matchField: result.snippet ? 'content' : 'title'
         }));
         
         setSearchResults(transformedResults);
