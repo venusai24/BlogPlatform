@@ -3,6 +3,7 @@ const redis = require("redis");
 const crypto = require("crypto");
 const axios = require("axios");
 const { pipeline } = require('@xenova/transformers');
+const { InferenceClient } = require("@huggingface/inference");
 
 
 // For local sentence transformers, you'll need to run a model server
@@ -64,31 +65,20 @@ const generateEmbeddingWithHuggingFace = async (text) => {
       console.log('Local model failed, falling back to API:', localError.message);
       
       // Fallback to API if local model fails
-      const response = await axios.post(
-        `https://api-inference.huggingface.co/models/${MODEL_NAME}`,
-        {
-          inputs: text,
-          options: { wait_for_model: true }
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 30000
+      const client = new InferenceClient(HUGGINGFACE_API_KEY);
+      
+      const response = await client.featureExtraction({
+        model: MODEL_NAME,
+        inputs: text,
+        provider: "hf-inference",
+      });
+
+      if (Array.isArray(response)) {
+        // Handle potential nested array structure (batch dimension)
+        if (response.length > 0 && Array.isArray(response[0])) {
+          return response[0];
         }
-      );
-
-      if (!response.data || !Array.isArray(response.data) || !response.data[0]) {
-        throw new Error('Invalid response format from Hugging Face API');
-      }
-
-      // Extract the actual embedding array from nested structure
-      const embedding = response.data[0];
-      if (Array.isArray(embedding)) {
-        return embedding;
-      } else if (Array.isArray(embedding.data)) {
-        return embedding.data;
+        return response;
       }
 
       throw new Error('Unexpected embedding format from API');
@@ -308,27 +298,20 @@ const cosineSimilarity = (vec1, vec2) => {
 
 const generateSentenceSimilarityWithHuggingFace = async (sourceSentence, sentences) => {
   try {
-    const response = await axios.post(
-      `https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2`,
-      {
-        inputs: {
-          source_sentence: sourceSentence,
-          sentences: sentences // array of strings
-        },
-        options: { wait_for_model: true }
+    const client = new InferenceClient(HUGGINGFACE_API_KEY);
+
+    const output = await client.sentenceSimilarity({
+      model: "sentence-transformers/all-MiniLM-L6-v2",
+      inputs: {
+        source_sentence: sourceSentence,
+        sentences: sentences // array of strings
       },
-      {
-        headers: {
-          'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
-    // The response is an array of similarity scores
-    return response.data;
+      provider: "hf-inference",
+    });
+    
+    return output;
   } catch (error) {
-    console.error("Hugging Face API error:", error.response?.data || error.message);
+    console.error("Hugging Face API error:", error);
     throw error;
   }
 };

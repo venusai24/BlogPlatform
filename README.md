@@ -1,60 +1,63 @@
-# IntelliBlog
-Blog platform 
+# BlogPlatform
 
-<br>
+A full‑stack blogging platform with AI-powered features: semantic search, title similarity search, and automatic summarization. This repo contains a Node/Express backend (blog-api) and a React frontend (frontend). The app indexes blog posts into a vector store (Qdrant) and uses Hugging Face / local sentence-transformer models to generate embeddings.
 
-MERN stack Blogging application which uses MongoDB database to store blogs and uses LLMs to summarize content in blogs.
-To reduce the overuse of LLMs for every summarization Redis is used for caching the summarizes for different tokens which can directly be used to summarize other content without using LLMs. 
+## Key features
+- Create, edit and view blog posts
+- Title-based semantic similarity search (find posts by similar titles)
+- Content semantic search (query by meaning using vector embeddings)
+- AI summarization of blog content
+- Author and snippet metadata returned with search results
+- Embedding caching (Redis) and vector indexing (Qdrant)
 
-<br>
+## Screenshots
+- Dashboard: images/Dashboard.png  
+  ![Dashboard](images/Dashboard.png)
 
-Pages:
+- Create / Posting: images/Posting.png  
+  ![Posting](images/Posting.png)
 
-<br>
+- View post: images/View.png  
+  ![View](images/View.png)
 
-Authentication page:
-![Screenshot 2025-01-28 201607](https://github.com/user-attachments/assets/528fb5ae-eb81-4305-b9de-043794c9f066)
+- Semantic search (content): images/SemanticSearch.png  
+  Demonstrates similarity search of blog posts based on semantic similarity of content and query.  
+  ![SemanticSearch](images/SemanticSearch.png)
 
-<br>
-Home page:
+- Title search: images/TitleSearch.png  
+  Demonstrates title-based semantic similarity search of blog posts.  
+  ![TitleSearch](images/TitleSearch.png)
 
-![Screenshot 2025-01-28 201437](https://github.com/user-attachments/assets/7984b9e0-f95e-40a6-9b8a-cad4999dd7f2)
+- Summarization: images/Summarize.png  
+  Demonstrates AI-based summarization of blog content.  
+  ![Summarize](images/Summarize.png)
 
+- Login and Register (side-by-side, small width):  
+  <table><tr>
+  <td><img src="images/Login.png" alt="Login" width="300"/></td>
+  <td><img src="images/Register.png" alt="Register" width="300"/></td>
+  </tr></table>
 
+## How it works (brief)
+- When a blog is created/updated, the backend generates embeddings for the title and content (using Hugging Face inference or a local model) and upserts two vectors into Qdrant (one for title, one for content).
+- Semantic search: the user query is embedded, then Qdrant is queried for nearest vectors (content or title). Results include payload metadata (blogId, title, snippet, author).
+- Title search: a focused search against title vectors to find posts with similar titles.
+- Summarization: an AI model is used to produce a shorter summary of the post content on demand.
+- Results with similarity below 50% are filtered out on the frontend.
 
-<br>
-Uploading Page:
+## Getting started
 
-![Screenshot 2025-01-28 201510](https://github.com/user-attachments/assets/734b9954-28e1-40a0-bf75-68db977d8e5e)
+Prerequisites
+- Node.js (v16+ recommended)
+- npm or yarn
+- MongoDB (or connection string to MongoDB Atlas)
+- Qdrant running locally or accessible remotely (default: http://localhost:6333)
+- Redis (optional, used for embedding cache)
+- (Optional) Local embedding server OR a Hugging Face API token
 
-![Screenshot 2025-01-28 201522](https://github.com/user-attachments/assets/bc9ba648-5b71-40d0-9d4a-77ea7f3938e6)
-
-
-<br>
-
-Subscription to be implemented later. Also trying to implement summary based searching of blogs.
-<br>
-Setup:
-run backend on the repository itself by typing 
-nodemon server.js. By default the port for backend is 5000
-
-<br>
-
-run frontend on another terminal by changing directory to frontend and then typing npm start. By default the port for frontend is 3000
-
-<br>
-
-The GROG cloud API key  is not provided and the user who is using this application should make his own groqcloud account and put his own api key.
-<br>
-Setup an SQL database for authentication and a MongoDB database for storage of content and posts in the blog. In a .env file fill the DB_HOST, DB_PASSWORD, DB_USER, DB_NAME and DATABASE_URI. 
-<br>
-<h3>Sample .env file:</h3>
-
-<pre>
-DB_HOST=&lt;hostname for example, "localhost"&gt;
-DB_PASSWORD=&lt;your_password&gt;
-DB_USER=&lt;your_sql_db_user&gt;
-DB_NAME=&lt;your_database_name&gt;
-DATABASE_URI=&lt;your_mongodb_uri&gt;
-</pre>
-
+## Tech stack
+- Backend: Node.js, Express, Mongoose
+- Vector DB: Qdrant
+- Embeddings: Hugging Face Inference API / local sentence-transformer
+- Cache: Redis (optional)
+- Frontend: React

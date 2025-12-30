@@ -76,7 +76,7 @@ const NavBar = ({ onSearchResults }) => {
           _id: result.id,
           title: result.title,
           author: result.author || 'Unknown',
-          similarity: result.score,
+          similarity: 3*result.score,
           matchField: result.snippet ? 'content' : 'title'
         }));
         

@@ -2308,3 +2308,5 @@ frontend/public/manifest.json
 frontend/src/logo.svg
 frontend/public/robots.txt
 scripts/testGroq.js
+frontend/node_modules
+log-file.txt
