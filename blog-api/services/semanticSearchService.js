@@ -1,5 +1,6 @@
 const { QdrantClient } = require("@qdrant/js-client-rest");
 const { generateEmbedding } = require('./embeddingService');
+const { v4: uuidv4 } = require('uuid');
 
 const COLLECTION_NAME = 'blog-platform';
 
@@ -9,47 +10,66 @@ const initQdrantClient = () => {
   });
 };
 
+const chunkText = (text, maxChars = 500) => {
+  if (!text) return [];
+  const chunks = [];
+  const paragraphs = text.split(/\n\s*\n/);
+  let currentChunk = '';
+  
+  for (const para of paragraphs) {
+      if (currentChunk.length + para.length > maxChars && currentChunk.length > 0) {
+          chunks.push(currentChunk.trim());
+          currentChunk = para;
+      } else {
+          currentChunk += (currentChunk ? '\n\n' : '') + para;
+      }
+  }
+  if (currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
+  }
+  return chunks;
+};
+
 const indexBlogPost = async (blog) => {
   try {
-    const [titleEmbedding, contentEmbedding] = await Promise.all([
-      generateEmbedding(blog.title),
-      generateEmbedding(blog.content)
-    ]);
-
     const client = initQdrantClient();
+    const points = [];
 
-    // Convert MongoDB ObjectId to a positive integer for Qdrant
-    const idNum = parseInt(blog._id.toString().substring(0, 8), 16);
-    
-    // Index both title and content vectors
-    await client.upsert(COLLECTION_NAME, {
-      points: [
-        {
-          id: idNum * 2, // Even numbers for title vectors
-          vector: titleEmbedding,
-          payload: {
-            blogId: blog._id.toString(),
-            type: 'title',
-            title: blog.title,
-            snippet: blog.content.substring(0, 200),
-            author: blog.author // Include author in payload
-          }
-        },
-        {
-          id: idNum * 2 + 1, // Odd numbers for content vectors
-          vector: contentEmbedding,
-          payload: {
-            blogId: blog._id.toString(),
-            type: 'content',
-            title: blog.title,
-            content: blog.content,
-            author: blog.author // Include author in payload
-          }
-        }
-      ]
+    // 1. Index Title
+    const titleEmbedding = await generateEmbedding(blog.title);
+    points.push({
+      id: uuidv4(),
+      vector: titleEmbedding,
+      payload: {
+        blogId: blog._id.toString(),
+        type: 'title',
+        title: blog.title,
+        snippet: blog.content.substring(0, 200),
+        author: blog.author
+      }
     });
 
-    console.log(`[SemanticSearchService] Blog indexed in Qdrant: ${blog._id}`);
+    // 2. Index Content Chunks
+    const chunks = chunkText(blog.content);
+    const contentEmbeddings = await Promise.all(chunks.map(chunk => generateEmbedding(chunk)));
+
+    chunks.forEach((chunk, index) => {
+      points.push({
+        id: uuidv4(),
+        vector: contentEmbeddings[index],
+        payload: {
+          blogId: blog._id.toString(),
+          type: 'content',
+          title: blog.title,
+          content: blog.content,
+          snippet: chunk, // RAG Snippet
+          author: blog.author
+        }
+      });
+    });
+
+    await client.upsert(COLLECTION_NAME, { points });
+    console.log(`[SemanticSearchService] Blog indexed in Qdrant with ${chunks.length} chunks: ${blog._id}`);
   } catch (error) {
     console.error('Error indexing blog post:', error);
     throw error;
@@ -59,7 +79,6 @@ const indexBlogPost = async (blog) => {
 const verifyCollection = async (client) => {
   try {
     const collections = await client.getCollections();
-    console.log('Available collections:', JSON.stringify(collections, null, 2));
     
     // Check if our collection exists in the list of collections
     const collectionExists = collections.collections?.some(c => c.name === COLLECTION_NAME);
@@ -82,10 +101,6 @@ const verifyCollection = async (client) => {
       console.log('Collection created successfully');
       return true;
     }
-    
-    // Get specific collection info
-    const collection = await client.getCollection(COLLECTION_NAME);
-    console.log('Collection info:', JSON.stringify(collection, null, 2));
     return true;
   } catch (error) {
     console.error('Error verifying/creating collection:', error);
@@ -95,7 +110,6 @@ const verifyCollection = async (client) => {
 
 const searchBlogs = async (query, options = {}) => {
   try {
-    // Validate inputs
     if (!query || typeof query !== 'string') {
       throw new Error('Invalid query: ' + JSON.stringify(query));
     }
@@ -105,36 +119,27 @@ const searchBlogs = async (query, options = {}) => {
       limit = 5
     } = options;
     
-    // Handle searchType validation
     let validType = 'content';
     if (typeof searchType === 'string') {
       const type = searchType.toLowerCase();
       if (type === 'hybrid') {
-        validType = ['title', 'content'];  // Search both types for hybrid search
+        validType = ['title', 'content'];
       } else if (['title', 'content'].includes(type)) {
         validType = type;
       }
     }
     
-    console.log('Search configuration:', {
-      query,
-      searchType: validType,
-      limit
-    });
     const queryEmbedding = await generateEmbedding(query);
     const client = initQdrantClient();
-    
-    // Verify collection exists and is configured
     await verifyCollection(client);
 
     const searchParams = {
       vector: queryEmbedding,
-      limit: parseInt(limit),
+      limit: parseInt(limit) * 3, // Fetch more to allow for deduping
       with_payload: true,
       with_vectors: false
     };
 
-    // Add type filter if not doing hybrid search
     if (!Array.isArray(validType)) {
       searchParams.filter = {
         must: [
@@ -146,39 +151,33 @@ const searchBlogs = async (query, options = {}) => {
       };
     }
 
-    console.log('Searching Qdrant with query:', {
-      queryLength: query.length,
-      searchType,
-      embeddingLength: queryEmbedding.length
-    });
-
-    console.log('Search params:', JSON.stringify(searchParams, null, 2));
-    
     const results = await client.search(COLLECTION_NAME, searchParams);
-    
-    console.log('Qdrant search results:', JSON.stringify(results, null, 2));
 
     if (!results || !Array.isArray(results)) {
-      console.error('Invalid results format from Qdrant:', results);
       return [];
     }
 
-    const mappedResults = results.map(match => {
-      if (!match.payload) {
-        console.error('Match missing payload:', match);
-        return null;
-      }
-      return {
-        id: match.payload.blogId,
-        score: match.score,
-        title: match.payload.title,
-        snippet: match.payload.snippet || match.payload.content?.substring(0, 200),
-        author: match.payload.author // Extract author from payload
-      };
-    }).filter(Boolean); // Remove any null results
+    // Deduplicate by blogId, keeping the highest scoring chunk
+    const uniqueBlogs = new Map();
 
-    console.log('Mapped results:', JSON.stringify(mappedResults, null, 2));
-    return mappedResults;
+    for (const match of results) {
+      if (!match.payload) continue;
+      const blogId = match.payload.blogId;
+
+      if (!uniqueBlogs.has(blogId)) {
+        uniqueBlogs.set(blogId, {
+          id: blogId,
+          score: match.score,
+          title: match.payload.title,
+          snippet: match.payload.snippet, // This is now the specific chunk
+          author: match.payload.author
+        });
+      }
+    }
+
+    // Convert map to array and take top `limit` results
+    const finalResults = Array.from(uniqueBlogs.values()).slice(0, parseInt(limit));
+    return finalResults;
   } catch (error) {
     console.error('Error in semantic search:', error);
     throw error;
@@ -189,16 +188,19 @@ const deleteBlogEmbeddings = async (blogId) => {
   try {
     const client = initQdrantClient();
     
-    // Convert MongoDB ObjectId to the same integer IDs used in indexing
-    const idNum = parseInt(blogId.toString().substring(0, 8), 16);
-    const titleId = idNum * 2;
-    const contentId = idNum * 2 + 1;
-    
+    // Delete all chunks for this blog post using payload filter
     await client.delete(COLLECTION_NAME, {
-      points: [titleId, contentId]
+      filter: {
+        must: [
+          {
+            key: 'blogId',
+            match: { value: blogId.toString() }
+          }
+        ]
+      }
     });
     
-    console.log(`[SemanticSearchService] Blog embeddings deleted from Qdrant: ${blogId} (points ${titleId}, ${contentId})`);
+    console.log(`[SemanticSearchService] Blog embeddings deleted from Qdrant: ${blogId}`);
   } catch (error) {
     console.error('Error deleting blog embeddings:', error);
     throw error;

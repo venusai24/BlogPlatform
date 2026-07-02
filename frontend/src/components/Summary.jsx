@@ -17,7 +17,7 @@ function Summary({ content, title, setSummary }) {
       // Step 2: Poll for result
       let attempts = 0;
       let result = null;
-      while (attempts < 30) { // up to 60 seconds
+      while (attempts < 90) { // up to 180 seconds
         await new Promise((r) => setTimeout(r, 2000));
         const statusRes = await axios.get(`http://localhost:5000/blogs/summarize/status/${jobId}`);
         if (statusRes.data.status === "completed") {

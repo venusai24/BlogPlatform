@@ -8,11 +8,19 @@ const blogcontentSchema = new Schema({
     summary: { type: String }, 
     tags: [String],
     likes: { type: Number, default: 0 },
+    likedBy: [{ type: String }],
     comments: [
         {
             user: String,
             comment: String,
             timestamp: { type: Date, default: Date.now },
+            replies: [
+                {
+                    user: String,
+                    reply: String,
+                    timestamp: { type: Date, default: Date.now },
+                }
+            ]
         },
     ],
 }, { timestamps: true });

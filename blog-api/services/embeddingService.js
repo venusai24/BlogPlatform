@@ -14,7 +14,7 @@ const MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"; // 384 dimensions
 // "sentence-transformers/all-mpnet-base-v2" // 768 dimensions
 // "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" // 384 dimensions
 
-let redisClient;
+const redisClient = require('./redisClient');
 let redisEnabled = true;
 
 let embeddingModel = null;
@@ -36,10 +36,12 @@ const initializeModel = async () => {
   return embeddingModel;
 };
 
+// Check if Redis is connected
 (async () => {
   try {
-    redisClient = redis.createClient();
-    await redisClient.connect();
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+    }
     console.log("Connected to Redis server for embeddings.");
   } catch (error) {
     console.error("Failed to connect to Redis server. Embedding caching disabled.", error);

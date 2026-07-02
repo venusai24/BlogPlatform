@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 
-const NavBar = ({ onSearchResults }) => {
+const NavBar = ({ onSearchResults = () => {} }) => {
   const [searchText, setSearchText] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [searchType, setSearchType] = useState("title"); // "title" or "semantic"
@@ -10,6 +10,10 @@ const NavBar = ({ onSearchResults }) => {
   const [showSearchOptions, setShowSearchOptions] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [debounceTimer, setDebounceTimer] = useState(null);
+  
+  // AI State
+  const [aiAnswer, setAiAnswer] = useState(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   // Debounced search to avoid too many API calls
   useEffect(() => {
@@ -32,6 +36,7 @@ const NavBar = ({ onSearchResults }) => {
         clearTimeout(debounceTimer);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchText, searchType]);
 
   const toggleSearch = () => {
@@ -39,6 +44,7 @@ const NavBar = ({ onSearchResults }) => {
     if (showSearch) {
       setSearchText("");
       setSearchResults([]);
+      setAiAnswer(null);
       onSearchResults([]);
       setShowSearchOptions(false);
     }
@@ -47,6 +53,7 @@ const NavBar = ({ onSearchResults }) => {
   const handleSearchInputChange = (e) => {
     const query = e.target.value;
     setSearchText(query);
+    setAiAnswer(null);
   };
 
   const handleSearch = async (query) => {
@@ -118,9 +125,29 @@ const NavBar = ({ onSearchResults }) => {
     }
   };
 
+  const handleAskAI = async () => {
+    if (!searchText.trim()) return;
+    
+    setIsAiLoading(true);
+    setAiAnswer(null);
+    try {
+      const response = await axios.post("http://localhost:5000/blogs/ask", {
+        query: searchText,
+        detailLevel: "brief"
+      });
+      setAiAnswer(response.data.answer);
+    } catch (error) {
+      console.error("Error asking AI:", error);
+      setAiAnswer("Sorry, I encountered an error while trying to answer your question.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   const clearSearch = () => {
     setSearchText("");
     setSearchResults([]);
+    setAiAnswer(null);
     onSearchResults([]);
   };
 
@@ -239,23 +266,70 @@ const NavBar = ({ onSearchResults }) => {
         </div>
 
         {/* My Posts Button */}
-        <div>
+        <div className="flex gap-4">
           <Link
             to="/MyPosts"
             className="px-4 py-2 border rounded-full text-gray-600 hover:bg-gray-100"
           >
             My Posts
           </Link>
+          <Link
+            to="/account"
+            className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 font-semibold"
+          >
+            Account
+          </Link>
         </div>
       </nav>
 
       {/* Search Results Preview (Optional) */}
-      {showSearch && searchText && searchResults.length > 0 && (
-        <div className="absolute top-full left-0 right-0 bg-white border-t shadow-lg z-40 max-h-96 overflow-y-auto">
+      {showSearch && searchText && (
+        <div className="absolute top-full left-0 right-0 bg-white border-t shadow-lg z-40 max-h-[500px] overflow-y-auto">
           <div className="p-4">
-            <div className="text-sm text-gray-600 mb-2">
-              {searchType === "semantic" ? "Smart Search Results:" : "Title Search Results:"}
+            
+            {/* Ask AI Section */}
+            <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-semibold text-blue-800 flex items-center">
+                        <span className="mr-2">✨</span> Ask AI about "{searchText}"
+                    </h3>
+                    <Link 
+                        to={`/ask?q=${encodeURIComponent(searchText)}`}
+                        className="text-xs bg-white text-blue-600 px-3 py-1 rounded-full border border-blue-200 hover:bg-blue-50 transition-colors"
+                        onClick={() => setShowSearch(false)}
+                    >
+                        Detailed View →
+                    </Link>
+                </div>
+                
+                {!aiAnswer && !isAiLoading && (
+                    <button 
+                        onClick={handleAskAI}
+                        className="w-full text-center py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors"
+                    >
+                        Generate Brief Answer
+                    </button>
+                )}
+                
+                {isAiLoading && (
+                    <div className="flex items-center justify-center space-x-2 py-4">
+                        <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-sm text-blue-600">Synthesizing from blogs...</span>
+                    </div>
+                )}
+                
+                {aiAnswer && (
+                    <div className="text-sm text-gray-700 mt-2 p-3 bg-white rounded border border-blue-100 shadow-sm leading-relaxed whitespace-pre-wrap">
+                        {aiAnswer}
+                    </div>
+                )}
             </div>
+
+            {searchResults.length > 0 && (
+              <>
+                <div className="text-sm text-gray-600 mb-2 font-semibold border-b pb-1">
+                  {searchType === "semantic" ? "Smart Search Results:" : "Title Search Results:"}
+                </div>
             <div className="space-y-2">
               {searchResults.slice(0, 5).map((result, index) => (
                 <Link 
@@ -288,6 +362,8 @@ const NavBar = ({ onSearchResults }) => {
                 </div>
               )}
             </div>
+            </>
+            )}
           </div>
         </div>
       )}

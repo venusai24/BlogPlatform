@@ -19,8 +19,9 @@ mongoose.connection.once('open', () => {
 
 // Search and Retrieval endpoints (specific routes first)
 blogrouter.get('/search', blogSearchController.searchBlogs);
+blogrouter.post('/ask', blogSearchController.askBlogs);
 blogrouter.get('/getid', blogCrudController.getBlogIdByTitleAuthor);
-blogrouter.post('/semanticSearchbyTitle', blogController.semanticSearchbyTitle);
+blogrouter.post('/semanticSearchbyTitle', require('../controllers/blogController').semanticSearchbyTitle);
 blogrouter.post('/retrieve', blogRetrievalController.retrieveBlogsByTitle);
 
 // Summarization endpoints
@@ -29,10 +30,13 @@ blogrouter.get('/summarize/status/:jobId', blogController.summarizeStatus);
 
 // CRUD endpoints (generic routes last)
 blogrouter.get('/', blogCrudController.getAllBlogs);
-blogrouter.post('/', authenticateToken, blogCrudController.createBlog);
+blogrouter.post('/', blogCrudController.createBlog);
 blogrouter.get('/:id', blogCrudController.getBlogById);
 blogrouter.put('/:id', authenticateToken, blogCrudController.updateBlog);
 blogrouter.delete('/:id', authenticateToken, blogCrudController.deleteBlog);
+blogrouter.post('/:id/comments', authenticateToken, blogCrudController.addComment);
+blogrouter.post('/:id/comments/:commentId/replies', authenticateToken, blogCrudController.addReply);
+blogrouter.put('/:id/like', authenticateToken, blogCrudController.likeBlog);
 
 module.exports = blogrouter;
 
