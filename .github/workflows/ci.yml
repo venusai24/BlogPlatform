@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: blog-api/package-lock.json
+      - name: Install dependencies
+        working-directory: blog-api
+        run: npm ci
+      - name: Run jest
+        working-directory: blog-api
+        run: npx jest --ci
+
+  terraform:
+    name: Check Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.3
+      - name: Format check
+        run: terraform fmt -check -recursive infra
+      - name: Init and validate every stack
+        run: |
+          for stack in bootstrap persistent ephemeral; do
+            terraform -chdir="infra/$stack" init -backend=false -input=false
+            terraform -chdir="infra/$stack" validate
+          done
+      - name: Terraform tests (mocked providers, no AWS access)
+        run: |
+          for stack in persistent ephemeral; do
+            terraform -chdir="infra/$stack" test
+          done
+      - uses: terraform-linters/setup-tflint@v4
+      - name: TFLint
+        working-directory: infra
+        run: |
+          tflint --init --config "$GITHUB_WORKSPACE/infra/.tflint.hcl"
+          tflint --recursive --config "$GITHUB_WORKSPACE/infra/.tflint.hcl"

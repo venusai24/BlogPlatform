@@ -8,6 +8,7 @@ import BlogForm from './components/BlogForm';
 import MyPosts from './components/MyPosts';
 import UserAccount from './components/UserAccount';
 import AskResults from './components/AskResults';
+import AuthCallback from './components/AuthCallback';
 import './App.css';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
         <Route path="/MyPosts" element = {<MyPosts/>}/>
         <Route path="/account" element={<UserAccount />} />
         <Route path="/ask" element={<AskResults />} />
+        <Route path="/callback" element={<AuthCallback />} />
       </Routes>
     </Router>
   );

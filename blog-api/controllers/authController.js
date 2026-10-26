@@ -1,8 +1,8 @@
 const User = require('../model/User');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-require('dotenv').config(); // Ensure environment variables are loaded
-const JWT_SECRET = process.env.JWT_SECRET;
+const config = require('../src/config');
+const logger = require('../src/utils/logger');
 
 exports.register = async (req, res) => {
     const { username, password } = req.body;
@@ -19,7 +19,7 @@ exports.register = async (req, res) => {
         await newUser.save();
         res.status(201).send({ message: "User registered successfully" });
     } catch (error) {
-        console.error("Error during registration:", error);
+        logger.error({ err: error }, 'Error during registration');
         res.status(500).send({ message: "Error registering user" });
     }
 };
@@ -35,16 +35,18 @@ exports.login = async (req, res) => {
         if (!passwordIsValid) {
             return res.status(401).send({ message: "Invalid username or password" });
         }
-        console.log("JWT_SECRET:", process.env.JWT_SECRET); // Debugging line to check JWT_SECRET
-        const token = jwt.sign({ userId: user._id, username: user.username }, JWT_SECRET, {
+        const token = jwt.sign({ userId: user._id, username: user.username }, config.jwtSecret, {
             expiresIn: '1h',
+            issuer: 'blogplatform-api',
+            audience: 'blogplatform-web',
+            algorithm: 'HS256',
         });
         res.status(200).send({
             message: "Login successful",
             token,
         });
     } catch (error) {
-        console.error("Error during login:", error);
+        logger.error({ err: error }, 'Error during login');
         res.status(500).send({ message: "Error logging in" });
     }
 };
@@ -55,7 +57,7 @@ exports.getMe = async (req, res) => {
         if (!user) return res.status(404).send({ message: "User not found" });
         res.status(200).send(user);
     } catch (error) {
-        console.error("Error fetching user details:", error);
+        logger.error({ err: error }, 'Error fetching user details');
         res.status(500).send({ message: "Error fetching user details" });
     }
 };

@@ -20,7 +20,7 @@ const AskResults = () => {
             }
             try {
                 setIsLoading(true);
-                const response = await axios.post("http://localhost:5000/blogs/ask", {
+                const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/ask`, {
                     query,
                     detailLevel: "detailed",
                     limit: 5

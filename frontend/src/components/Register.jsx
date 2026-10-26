@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './Auth.css';
+import { isCognito } from '../auth/session';
+import { login } from '../auth/oidc';
 
 function Register() {
   const [username, setUsername] = useState('');
@@ -12,7 +14,7 @@ function Register() {
 
   const handleRegister = async () => {
     try {
-      await axios.post('http://localhost:5000/auth/register', { username, password });
+      await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/auth/register`, { username, password });
       setSuccess('Registration successful! Please log in.');
       setError('');
       setTimeout(() => navigate('/'), 2000);
@@ -22,6 +24,16 @@ function Register() {
       console.log(error);
     }
   };
+
+  if (isCognito()) {
+    return (
+      <div className="auth-container">
+        <h2>Register</h2>
+        <p>Accounts are managed by BlogPlatform sign-in.</p>
+        <button onClick={() => login()}>Sign in with BlogPlatform</button>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-container">

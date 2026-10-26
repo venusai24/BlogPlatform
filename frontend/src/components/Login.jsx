@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './Auth.css';
 import { jwtDecode } from 'jwt-decode';
+import { isCognito } from '../auth/session';
+import { login } from '../auth/oidc';
 
 
 function Login() {
@@ -13,7 +15,7 @@ function Login() {
 
   const handleLogin = async () => {
     try {
-      const response = await axios.post('http://localhost:5000/auth/login', {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/auth/login`, {
         username,
         password,
       });
@@ -32,6 +34,15 @@ function Login() {
       setError('Invalid username or password');
     }
   };
+
+  if (isCognito()) {
+    return (
+      <div className="auth-container">
+        <h2>Login</h2>
+        <button onClick={() => login()}>Sign in with BlogPlatform</button>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-container">

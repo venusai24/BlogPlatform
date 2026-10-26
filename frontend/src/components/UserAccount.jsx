@@ -4,6 +4,7 @@ import axios from "axios";
 import NavBar from "./NavBar";
 import { Card, CardContent } from "./ui/Card";
 import { motion } from "framer-motion";
+import { getToken } from '../auth/session';
 
 function UserAccount() {
   const [user, setUser] = useState(null);
@@ -15,20 +16,20 @@ function UserAccount() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const token = localStorage.getItem("token");
+        const token = getToken();
         if (!token) {
           navigate("/login");
           return;
         }
 
         // Fetch User Details
-        const userRes = await axios.get("http://localhost:5000/auth/me", {
+        const userRes = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setUser(userRes.data);
 
         // Fetch User's Posts
-        const postsRes = await axios.get(`http://localhost:5000/blogs?author=${userRes.data.username}`);
+        const postsRes = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs?author=${userRes.data.username}`);
         setPosts(postsRes.data);
       } catch (err) {
         console.error("Failed to load user account details", err);

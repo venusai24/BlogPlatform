@@ -1,30 +1,31 @@
 const { Worker } = require('bullmq');
 const summarizeService = require('./summarize');
-const connection = {
-    host: process.env.REDIS_HOST,
-    port: process.env.REDIS_PORT,
-    password: process.env.REDIS_PASSWORD
-};
+const alertService = require('./alertService');
+const config = require('../src/config');
+const logger = require('../src/utils/logger');
+const { bullConnection } = require('../src/config/redisConnection');
 
-console.log("Initializing summarizeWorker with connection:", connection);
+// Never log the connection object: it now carries the Redis password.
+logger.info({ concurrency: config.summarizeConcurrency }, 'Initializing summarizeWorker');
 const worker = new Worker('summarize', async job => {
-    console.log(`Processing job ${job.id} with data:`, job.data);
+    logger.debug({ jobId: job.id }, 'Processing summarize job');
     const { text, model } = job.data;
     try {
         const result = await summarizeService.summarizeJob({ text, model });
-        console.log(`Job ${job.id} processed successfully with result:`, result);
+        logger.debug({ jobId: job.id }, 'Summarize job processed');
         return result;
     } catch (error) {
-        console.error(`Error processing job ${job.id}:`, error);
+        logger.error({ err: error, jobId: job.id }, 'Error processing summarize job');
         throw error;
     }
-}, { connection });
+}, { connection: bullConnection(), concurrency: config.summarizeConcurrency });
 
 worker.on('completed', job => {
-    console.log(`Job ${job.id} completed.`);
+    logger.debug({ jobId: job.id }, 'Summarize job completed');
 });
 worker.on('failed', (job, err) => {
-    console.error(`Job ${job.id} failed:`, err);
+    logger.error({ err, jobId: job?.id }, 'Summarize job failed');
+    alertService.handleJobFailure('summarize', job, err);
 });
 
 module.exports = worker;

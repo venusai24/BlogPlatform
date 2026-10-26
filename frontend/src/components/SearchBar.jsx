@@ -18,7 +18,7 @@ const SearchBar = ({ onSearchResults }) => {
     };
 
     try {
-      const response = await axios.post("http://localhost:5000/blogs/retrieve", {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/retrieve`, {
         titleQuery: query,
       });
       onSearchResults(response.data);
