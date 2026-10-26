@@ -3,6 +3,7 @@ import axios from "axios";
 import NavBar from "./NavBar";
 import Summary from "./Summary";
 import { useNavigate } from "react-router-dom";
+import { clearSession, getToken, getUsername, isLoggedIn as sessionIsLoggedIn } from '../auth/session';
 
 function BlogForm() {
   const [activeTab, setActiveTab] = useState("Blog");
@@ -14,16 +15,11 @@ function BlogForm() {
   const navigate = useNavigate();
 
   // Helper function to check if user is logged in
-  const isLoggedIn = () => {
-    const token = localStorage.getItem("token");
-    const username = localStorage.getItem("username");
-    return token && username;
-  };
+  const isLoggedIn = () => sessionIsLoggedIn();
 
   // Helper function to handle authentication errors
   const handleAuthError = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("username");
+    clearSession();
     alert("Your session has expired. Please log in again.");
     navigate("/login");
   };
@@ -38,12 +34,12 @@ function BlogForm() {
       return;
     }
 
-    const username = localStorage.getItem("username");
-    const token = localStorage.getItem("token");
+    const username = getUsername();
+    const token = getToken();
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/blogs",
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs`,
         {
           title,
           content,

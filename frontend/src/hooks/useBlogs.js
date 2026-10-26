@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+import { getToken, getUsername } from '../auth/session';
 
-const API_URL = 'http://localhost:5000/blogs';
+const API_URL = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs`;
 
 // Hook to fetch all blogs or by author
 export const useBlogs = (author = null) => {
@@ -37,7 +38,7 @@ export const useAddComment = () => {
       const { data } = await axios.post(
         `${API_URL}/${id}/comments`,
         { comment },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        { headers: { Authorization: `Bearer ${getToken()}` } }
       );
       return data;
     },
@@ -51,7 +52,7 @@ export const useAddComment = () => {
       // Optimistically update to the new value
       queryClient.setQueryData(['blog', id], (old) => {
         if (!old) return old;
-        const user = localStorage.getItem('username') || 'Anonymous';
+        const user = getUsername() || 'Anonymous';
         return {
           ...old,
           comments: [...(old.comments || []), { user, comment, timestamp: new Date().toISOString() }],
@@ -83,7 +84,7 @@ export const useAddReply = () => {
       const { data } = await axios.post(
         `${API_URL}/${id}/comments/${commentId}/replies`,
         { reply },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        { headers: { Authorization: `Bearer ${getToken()}` } }
       );
       return data;
     },
@@ -93,7 +94,7 @@ export const useAddReply = () => {
 
       queryClient.setQueryData(['blog', id], (old) => {
         if (!old) return old;
-        const user = localStorage.getItem('username') || 'Anonymous';
+        const user = getUsername() || 'Anonymous';
         
         const newComments = old.comments.map(c => {
           if (c._id === commentId) {
@@ -130,7 +131,7 @@ export const useLikeBlog = () => {
       const { data } = await axios.put(
         `${API_URL}/${id}/like`,
         {},
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        { headers: { Authorization: `Bearer ${getToken()}` } }
       );
       return data;
     },
@@ -141,7 +142,7 @@ export const useLikeBlog = () => {
       queryClient.setQueryData(['blog', id], (old) => {
         if (!old) return old;
         
-        const username = localStorage.getItem('username');
+        const username = getUsername();
         if (!username || old.author === username) return old; // Don't allow author to like
 
         const likedBy = old.likedBy || [];

@@ -1,22 +1,21 @@
+const { isValidObjectId } = require('mongoose');
 const BlogContent = require('../model/BlogContent');
-const semanticSearchService = require('../services/semanticSearchService');
+const postWriter = require('../services/postWriter');
 const io = require('../socket');
+const config = require('../src/config');
 
 exports.createBlog = async (req, res) => {
-    const { title, content, author, summary, tags } = req.body;
+    const { title, content, summary, tags } = req.body;
+    // With auth required, the author is always the authenticated user; a body `author` is ignored.
+    const author = config.authRequiredWrites
+        ? req.user.username
+        : (req.user?.username ?? req.body.author);
 
     try {
-        const newPost = new BlogContent({ title, content, author, summary, tags });
-        await newPost.save();
-
-        try {
-            // FIX: Call the correct service and method, passing the full object
-            await semanticSearchService.indexBlogPost(newPost);
-        } catch (err) {
-        }
+        const newPost = await postWriter.createPost({ title, content, author, summary, tags });
         res.status(201).json({ message: "Blog post created successfully", blog: newPost });
     } catch (error) {
-        res.status(500).json({ message: "Server Error", error: error.message });
+        res.status(500).json({ message: "Server Error" });
     }
 };
 
@@ -83,6 +82,10 @@ exports.updateBlog = async (req, res) => {
     const { id } = req.params;
     const { title, content, tags, summary } = req.body;
 
+    if (!isValidObjectId(id)) {
+        return res.status(400).json({ message: 'Invalid blog ID format' });
+    }
+
     try {
         const blog = await BlogContent.findById(id);
         if (!blog) {
@@ -90,25 +93,18 @@ exports.updateBlog = async (req, res) => {
         }
 
         // Authorization Hardening: Enforce row-level check
-        if (req.user && blog.author !== req.user.username) {
+        if (!req.user || blog.author !== req.user.username) {
             return res.status(403).json({ message: "Forbidden: You are not the author of this blog post" });
         }
 
-        if (title) blog.title = title;
-        if (content) blog.content = content;
-        if (summary !== undefined) blog.summary = summary;
-        if (tags) blog.tags = tags;
+        const changes = {};
+        if (title) changes.title = title;
+        if (content) changes.content = content;
+        if (summary !== undefined) changes.summary = summary;
+        if (tags) changes.tags = tags;
 
-        await blog.save();
-
-        try {
-            // FIX: Call the correct service and method to re-index
-            await semanticSearchService.indexBlogPost(blog);
-            console.log('[BlogCrudController] Blog re-indexed in Pinecone:', id);
-        } catch (err) {
-            console.error('[BlogCrudController] Failed to re-index blog in Pinecone:', err);
-        }
-        res.status(200).json({ message: "Blog post updated successfully", blog });
+        const updated = await postWriter.updatePost(blog, changes);
+        res.status(200).json({ message: "Blog post updated successfully", blog: updated });
     } catch (error) {
         res.status(500).json({ message: "Server error" });
     }
@@ -116,6 +112,11 @@ exports.updateBlog = async (req, res) => {
 
 exports.deleteBlog = async (req, res) => {
     const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+        return res.status(400).json({ message: 'Invalid blog ID format' });
+    }
+
     try {
         const blog = await BlogContent.findById(id);
         if (!blog) {
@@ -123,19 +124,11 @@ exports.deleteBlog = async (req, res) => {
         }
 
         // Authorization Hardening: Enforce row-level check
-        if (req.user && blog.author !== req.user.username) {
+        if (!req.user || blog.author !== req.user.username) {
             return res.status(403).json({ message: "Forbidden: You are not the author of this blog post" });
         }
 
-        const deletedBlog = await BlogContent.findByIdAndDelete(id);
-
-        try {
-            // CHANGED: We can now simply pass the ID, as the service uses a metadata filter.
-            await semanticSearchService.deleteBlogEmbeddings(id);
-            console.log('[BlogCrudController] Blog embeddings deleted from Pinecone:', id);
-        } catch (err) {
-            console.error('[BlogCrudController] Failed to delete blog embeddings from Pinecone:', err);
-        }
+        await postWriter.deletePost(blog);
 
         res.status(200).json({ message: "Blog post deleted successfully" });
     } catch (error) {
@@ -149,24 +142,29 @@ exports.addComment = async (req, res) => {
     // Assuming the authMiddleware adds req.user
     const user = req.user ? req.user.username : 'Anonymous';
 
+    if (!isValidObjectId(id)) {
+        return res.status(400).json({ message: 'Invalid blog ID format' });
+    }
+
     if (!comment) {
         return res.status(400).json({ message: "Comment is required" });
     }
 
     try {
-        const blog = await BlogContent.findById(id);
+        const blog = await BlogContent.findByIdAndUpdate(
+            id,
+            { $push: { comments: { user, comment } } },
+            { new: true }
+        );
         if (!blog) {
             return res.status(404).json({ message: "Blog post not found" });
         }
-
-        blog.comments.push({ user, comment });
-        await blog.save();
 
         io.getIO().emit('new_comment', { blogId: id, comments: blog.comments });
 
         res.status(201).json({ message: "Comment added", comments: blog.comments });
     } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
+        res.status(500).json({ message: "Server error" });
     }
 };
 
@@ -174,42 +172,50 @@ exports.likeBlog = async (req, res) => {
     const { id } = req.params;
     const username = req.user ? req.user.username : null;
 
+    if (!isValidObjectId(id)) {
+        return res.status(400).json({ message: 'Invalid blog ID format' });
+    }
+
     if (!username) {
         return res.status(401).json({ message: "You must be logged in to like a post" });
     }
 
     try {
-        const blog = await BlogContent.findById(id);
-        if (!blog) {
+        const doc = await BlogContent.findById(id).select('author likedBy');
+        if (!doc) {
             return res.status(404).json({ message: "Blog post not found" });
         }
 
         // Rule: Author cannot like their own blog post
-        if (blog.author === username) {
+        if (doc.author === username) {
             return res.status(400).json({ message: "You cannot like your own blog post" });
         }
 
-        const likedIndex = blog.likedBy.indexOf(username);
-        let action = 'liked';
+        const liked = doc.likedBy.includes(username);
+        const action = liked ? 'unliked' : 'liked';
 
-        if (likedIndex > -1) {
-            // Already liked, so unlike it
-            blog.likedBy.splice(likedIndex, 1);
-            blog.likes = Math.max((blog.likes || 1) - 1, 0);
-            action = 'unliked';
-        } else {
-            // Like it
-            blog.likedBy.push(username);
-            blog.likes = (blog.likes || 0) + 1;
+        // Atomic toggle: the filter makes a concurrent duplicate like/unlike a no-op.
+        let blog = await BlogContent.findOneAndUpdate(
+            liked ? { _id: id, likedBy: username } : { _id: id, likedBy: { $ne: username } },
+            liked
+                ? { $pull: { likedBy: username }, $inc: { likes: -1 } }
+                : { $addToSet: { likedBy: username }, $inc: { likes: 1 } },
+            { new: true }
+        );
+
+        if (!blog) {
+            // A concurrent toggle won the race; report the current state.
+            blog = await BlogContent.findById(id).select('likes likedBy');
+            if (!blog) {
+                return res.status(404).json({ message: "Blog post not found" });
+            }
         }
-
-        await blog.save();
 
         io.getIO().emit('like_updated', { blogId: id, likes: blog.likes, likedBy: blog.likedBy });
 
         res.status(200).json({ message: `Blog ${action} successfully`, likes: blog.likes, likedBy: blog.likedBy });
     } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
+        res.status(500).json({ message: "Server error" });
     }
 };
 
@@ -218,28 +224,29 @@ exports.addReply = async (req, res) => {
     const { reply } = req.body;
     const user = req.user ? req.user.username : 'Anonymous';
 
+    if (!isValidObjectId(id) || !isValidObjectId(commentId)) {
+        return res.status(400).json({ message: 'Invalid blog ID format' });
+    }
+
     if (!reply) {
         return res.status(400).json({ message: "Reply is required" });
     }
 
     try {
-        const blog = await BlogContent.findById(id);
+        const blog = await BlogContent.findOneAndUpdate(
+            { _id: id, 'comments._id': commentId },
+            { $push: { 'comments.$.replies': { user, reply } } },
+            { new: true }
+        );
         if (!blog) {
-            return res.status(404).json({ message: "Blog post not found" });
+            const postExists = await BlogContent.exists({ _id: id });
+            return res.status(404).json({ message: postExists ? "Comment not found" : "Blog post not found" });
         }
-
-        const comment = blog.comments.id(commentId);
-        if (!comment) {
-            return res.status(404).json({ message: "Comment not found" });
-        }
-
-        comment.replies.push({ user, reply });
-        await blog.save();
 
         io.getIO().emit('new_comment', { blogId: id, comments: blog.comments });
 
         res.status(201).json({ message: "Reply added", comments: blog.comments });
     } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
+        res.status(500).json({ message: "Server error" });
     }
 };

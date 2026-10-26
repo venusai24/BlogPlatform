@@ -1,0 +1,14 @@
+# This is a sample values file for Terraform
+# Do not commit real values to version control!
+
+# AWS Region to deploy resources in
+region = "ap-south-1"
+
+# Environment name (e.g., prod, dev, staging)
+env = "prod"
+
+# GitHub repository for OIDC trust (e.g., username/repo)
+github_repo = "myuser/blogplatform"
+
+# Budget notification email
+budget_email = "alerts@example.com"

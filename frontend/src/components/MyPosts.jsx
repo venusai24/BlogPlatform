@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import NavBar from "./NavBar";
 import AuthorPosts from "./AuthorPosts";
+import { getUsername } from '../auth/session';
 
 const MyPosts = () => {
   const [blogs, setBlogs] = useState([]);
-  const username = localStorage.getItem("username"); // Retrieve username from localStorage
+  const username = getUsername(); // Retrieve the signed-in username
   const navigate = useNavigate();
 
   const handleSearchResults = (results) => {

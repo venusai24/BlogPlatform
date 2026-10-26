@@ -1,15 +1,23 @@
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET;
+const config = require('../src/config');
 
-function authenticateToken(req, res, next) {
+const verifyOptions = config.jwtRequireClaims
+    ? { algorithms: ['HS256'], issuer: 'blogplatform-api', audience: 'blogplatform-web' }
+    : { algorithms: ['HS256'] };
+
+function authenticateAppToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token provided' });
-    jwt.verify(token, JWT_SECRET, (err, user) => {
+    jwt.verify(token, config.jwtSecret, verifyOptions, (err, user) => {
         if (err) return res.status(403).json({ message: 'Invalid token' });
         req.user = user;
         next();
     });
 }
 
-module.exports = authenticateToken;
+// AUTH_PROVIDER picks who issued the token. Every route imports this one module, so switching providers
+// needs no route changes. The Cognito verifier is only loaded in Cognito mode.
+module.exports = config.authProvider === 'cognito'
+    ? require('./cognitoAuth')
+    : authenticateAppToken;

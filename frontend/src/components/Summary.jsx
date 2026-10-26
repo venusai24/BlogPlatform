@@ -11,7 +11,7 @@ function Summary({ content, title, setSummary }) {
     setLocalSummary("");
     try {
       // Step 1: Request summarization job
-      const response = await axios.post("http://localhost:5000/blogs/summarize", { content });
+      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/summarize`, { content });
       const jobId = response.data.jobId;
       if (!jobId) throw new Error("No jobId returned from server");
       // Step 2: Poll for result
@@ -19,7 +19,7 @@ function Summary({ content, title, setSummary }) {
       let result = null;
       while (attempts < 90) { // up to 180 seconds
         await new Promise((r) => setTimeout(r, 2000));
-        const statusRes = await axios.get(`http://localhost:5000/blogs/summarize/status/${jobId}`);
+        const statusRes = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/summarize/status/${jobId}`);
         if (statusRes.data.status === "completed") {
           result = statusRes.data.summary;
           break;

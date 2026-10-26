@@ -1,9 +1,24 @@
-FROM node:20-alpine
+FROM node:24-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 COPY . .
-EXPOSE 3000
-# Enable hot reloading support for React inside Docker
-ENV CHOKIDAR_USEPOLLING=true
-CMD ["npm", "start"]
+ARG REACT_APP_API_URL
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+# Sign-in provider: empty or "app" keeps the email/password forms; "cognito" uses Cognito managed login.
+ARG REACT_APP_AUTH_PROVIDER
+ARG REACT_APP_COGNITO_REGION
+ARG REACT_APP_COGNITO_USER_POOL_ID
+ARG REACT_APP_COGNITO_CLIENT_ID
+ARG REACT_APP_COGNITO_DOMAIN
+ENV REACT_APP_AUTH_PROVIDER=$REACT_APP_AUTH_PROVIDER \
+    REACT_APP_COGNITO_REGION=$REACT_APP_COGNITO_REGION \
+    REACT_APP_COGNITO_USER_POOL_ID=$REACT_APP_COGNITO_USER_POOL_ID \
+    REACT_APP_COGNITO_CLIENT_ID=$REACT_APP_COGNITO_CLIENT_ID \
+    REACT_APP_COGNITO_DOMAIN=$REACT_APP_COGNITO_DOMAIN
+RUN npm run build
+
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/build /usr/share/nginx/html
+EXPOSE 8080

@@ -2,7 +2,6 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-const { pipeline } = require('@xenova/transformers');
 const BlogContent = require('../model/BlogContent');
 const { initQdrant, getQdrantClient } = require('../services/qdrantService');
 const { generateEmbedding } = require('../services/embeddingService');
@@ -39,10 +38,7 @@ const migrate = async () => {
         const qdrant = getQdrantClient();
         await ensureCollection(qdrant);
 
-        // 3. Load Embedding Model (384 dimensions)
-        console.log('Loading embedding model (Xenova/all-MiniLM-L6-v2)...');
-        const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-
+        // 3. (Embedding model handled by embeddingService.js)
         // 4. Fetch Blogs
         const blogs = await BlogContent.find({});
         console.log(`Found ${blogs.length} blogs to migrate.`);

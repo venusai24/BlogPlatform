@@ -14,7 +14,7 @@ export function useAsyncSummarization() {
     setSummary(null);
     setJobId(null);
     try {
-      const response = await axios.post('http://localhost:5000/blogs/summarize', { content, model });
+      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/summarize`, { content, model });
       setJobId(response.data.jobId);
       pollForResult(response.data.jobId);
     } catch (err) {
@@ -26,7 +26,7 @@ export function useAsyncSummarization() {
   const pollForResult = (id) => {
     pollRef.current = setInterval(async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/blogs/summarize/status/${id}`);
+        const res = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/summarize/status/${id}`);
         if (res.data.status === 'completed') {
           setSummary(res.data.summary);
           setLoading(false);

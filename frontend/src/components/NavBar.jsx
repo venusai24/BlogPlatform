@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { signOut } from "../auth/session";
 
 const NavBar = ({ onSearchResults = () => {} }) => {
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [searchType, setSearchType] = useState("title"); // "title" or "semantic"
@@ -70,7 +72,7 @@ const NavBar = ({ onSearchResults = () => {} }) => {
       
       if (searchType === "semantic") {
         // Use semantic search
-        response = await axios.get("http://localhost:5000/blogs/search", {
+        response = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/search`, {
           params: {
             query: query,
             searchType: 'content',
@@ -91,7 +93,7 @@ const NavBar = ({ onSearchResults = () => {} }) => {
         onSearchResults(transformedResults);
       } else {
         // Use title-based search
-        response = await axios.post("http://localhost:5000/blogs/semanticSearchbyTitle", {
+        response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/semanticSearchbyTitle`, {
           query: query,
         });
         
@@ -131,7 +133,7 @@ const NavBar = ({ onSearchResults = () => {} }) => {
     setIsAiLoading(true);
     setAiAnswer(null);
     try {
-      const response = await axios.post("http://localhost:5000/blogs/ask", {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/ask`, {
         query: searchText,
         detailLevel: "brief"
       });
@@ -279,6 +281,12 @@ const NavBar = ({ onSearchResults = () => {} }) => {
           >
             Account
           </Link>
+          <button
+            onClick={() => signOut().then(() => navigate("/login"))}
+            className="px-4 py-2 border rounded-full text-gray-600 hover:bg-gray-100"
+          >
+            Log out
+          </button>
         </div>
       </nav>
 

@@ -13,7 +13,7 @@ const AuthorPosts = ({ username }) => {
     const fetchPosts = async () => {
       try {
         const response = await axios.post(
-          "http://localhost:5000/blogs/retrieve/author",
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/retrieve/author`,
           { author: username }
         );
         setPosts(response.data.blogs);

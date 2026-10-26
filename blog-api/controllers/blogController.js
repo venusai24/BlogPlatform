@@ -1,41 +1,34 @@
 const summarizeService = require('../services/summarize');
+const logger = require('../src/utils/logger');
 
 exports.summarize = async (req, res) => {
     const { content, model } = req.body;
-    console.log('Received summarize request:', { content, model });
     if (!content) {
-        console.log('Content is missing in request body');
         return res.status(400).json({ message: 'Content is required' });
     }
     try {
-        console.log("Queueing summarization job...");
         const jobId = await summarizeService.queueSummarization(content, model);
-        console.log('Summarization job queued with jobId:', jobId);
+        logger.info({ jobId, contentLength: content.length }, 'Summarization job queued');
         res.status(202).json({ message: 'Summarization job queued', jobId });
     } catch (error) {
-        console.error('Error queueing summarization:', error);
+        logger.error({ err: error }, 'Error queueing summarization');
         res.status(500).json({ message: 'Server error' });
     }
 };
 
 exports.summarizeStatus = async (req, res) => {
     const { jobId } = req.params;
-    console.log('Received summarizeStatus request for jobId:', jobId);
     try {
-        console.log("Fetching summarization status...");
         const status = await summarizeService.getSummarizationStatus(jobId);
-        console.log('Summarization status fetched:', status);
         res.status(200).json(status);
     } catch (error) {
-        console.error('Error fetching summarization status:', error);
+        logger.error({ err: error, jobId }, 'Error fetching summarization status');
         res.status(500).json({ message: 'Server error' });
     }
 };
 
-const crypto = require('crypto');
 const BlogContent = require('../model/BlogContent');
-const { generateSentenceSimilarityWithHuggingFace} = require('../services/embeddingService');
-const redisClient = require('../services/redisClient');
+const escapeRegex = require('../utils/escapeRegex');
 
 exports.semanticSearchbyTitle = async (req, res) => {
   const { query, limit = 10, threshold = 0.3 } = req.body;
@@ -45,32 +38,56 @@ exports.semanticSearchbyTitle = async (req, res) => {
   }
 
   try {
-    // Fetch all blogs
-    const blogs = await BlogContent.find({
-      $or: [
-        { title: { $exists: true } },
-        { summary: { $exists: true } },
-        { content: { $exists: true } }
-      ]
+    const semanticSearchService = require('../services/semanticSearchService');
+    const qdrantResults = await semanticSearchService.searchBlogs(query, {
+      searchType: 'title',
+      limit: parseInt(limit),
+      minDenseScore: Number(threshold)
     });
 
-    // Prepare candidates (e.g., titles)
-    const candidates = blogs.map(blog => blog.title);
+    if (!qdrantResults) {
+      // Fallback to basic text search if Qdrant is unavailable
+      const fallbackBlogs = await BlogContent.find({ 
+          title: { $regex: escapeRegex(query), $options: 'i' } 
+      }).limit(parseInt(limit));
+      
+      return res.status(200).json({
+          message: "Semantic search unavailable, fallback to text search",
+          query,
+          results: fallbackBlogs.map(b => ({
+              _id: b._id,
+              title: b.title,
+              author: b.author,
+              similarity: 1.0,
+              createdAt: b.createdAt
+          }))
+      });
+    }
 
-    // Get similarity scores from HF API
-    const scores = await generateSentenceSimilarityWithHuggingFace(query, candidates);
+    if (qdrantResults.length === 0) {
+      return res.status(200).json({ message: "No blogs found", query, results: [] });
+    }
 
-    // Combine scores with blogs
-    const results = blogs.map((blog, idx) => ({
-      _id: blog._id,
-      title: blog.title,
-      author: blog.author,
-      similarity: scores[idx],
-      createdAt: blog.createdAt
-    }))
-    .filter(result => result.similarity >= threshold)
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, limit);
+    // The threshold is applied to dense (cosine) scores inside searchBlogs; the fused RRF
+    // `score` is on a different scale. Title search only returns dense matches.
+    const filteredQdrant = qdrantResults.filter(r => r.denseScore !== null);
+
+    // Fetch full blog info from DB to get createdAt, etc.
+    const blogIds = filteredQdrant.map(r => r.id);
+    const blogsFromDb = await BlogContent.find({ _id: { $in: blogIds } });
+
+    // Map back to original structure
+    const results = filteredQdrant.map(qRes => {
+      const dbBlog = blogsFromDb.find(b => b._id.toString() === qRes.id);
+      if (!dbBlog) return null;
+      return {
+        _id: dbBlog._id,
+        title: dbBlog.title,
+        author: dbBlog.author,
+        similarity: qRes.denseScore,
+        createdAt: dbBlog.createdAt
+      };
+    }).filter(r => r !== null);
 
     res.status(200).json({
       message: "Semantic search completed with scoring",
@@ -84,7 +101,7 @@ exports.semanticSearchbyTitle = async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error("Error in semantic search:", error);
+    logger.error({ err: error }, 'Error in semantic search');
     res.status(500).json({ message: "Server error" });
   }
 };

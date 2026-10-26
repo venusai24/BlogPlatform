@@ -1,64 +1,23 @@
-const { QdrantClient } = require("@qdrant/js-client-rest");
+const config = require('../src/config');
+const logger = require('../src/utils/logger');
+const { getEnsureStores } = require('./vectorStore');
 
-let qdrantClient = null;
-let isInitialized = false;
-
-const getQdrantClient = () => {
-    if (!qdrantClient) {
-        qdrantClient = new QdrantClient({ 
-            url: process.env.QDRANT_URL,
-            apiKey: process.env.QDRANT_API_KEY,
-        });
-    }
-    return qdrantClient;
-};
+// The shared Qdrant client now lives in vectorStore/qdrantStore.js; the names below are kept for callers.
+const getQdrantClient = () => require('./vectorStore/qdrantStore').getClient();
 
 const initQdrant = async () => {
     try {
-        const client = getQdrantClient();
-        const collectionName = process.env.QDRANT_COLLECTION_NAME;
-
-        // Check if collection exists
-        const collections = await client.getCollections();
-        const collectionExists = collections.collections.some(
-            c => c.name === collectionName
-        );
-
-        if (!collectionExists) {
-            console.log(`Creating Qdrant collection "${collectionName}"...`);
-            await client.createCollection(collectionName, {
-                vectors: {
-                    size: 384, // Dimension size for your embeddings
-                    distance: "Cosine"
-                },
-                optimizers_config: {
-                    default_segment_number: 2
-                },
-                replication_factor: 1
-            });
-            console.log(`Qdrant collection "${collectionName}" created successfully.`);
+        for (const store of getEnsureStores()) {
+            await store.ensureCollections(config.embedding.dim);
         }
-
-        isInitialized = true;
-        return client;
+        return getQdrantClient();
     } catch (error) {
-        console.error("Error initializing Qdrant:", error);
+        logger.error({ err: error }, 'Error initializing Qdrant');
         throw error;
     }
 };
 
-const getCollection = () => {
-    if (!isInitialized) {
-        throw new Error("Qdrant client not initialized");
-    }
-    return {
-        client: getQdrantClient(),
-        collectionName: process.env.QDRANT_COLLECTION_NAME
-    };
-};
-
 module.exports = {
     getQdrantClient,
-    initQdrant,
-    getCollection
+    initQdrant
 };

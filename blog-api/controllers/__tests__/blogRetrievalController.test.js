@@ -1,50 +1,34 @@
+jest.mock('../../model/BlogContent', () => ({ find: jest.fn() }));
+
 const request = require('supertest');
 const app = require('../../app');
-const mongoose = require('mongoose');
-const BlogContent = require('../model/BlogContent');
-const { calculateTitleScore } = require('../utils/searchUtils');
+const BlogContent = require('../../model/BlogContent');
+const { calculateTitleScore } = require('../../utils/searchUtils');
+
+const FIXTURES = [
+    {
+        _id: 'id1',
+        title: "Getting Started with Node.js",
+        content: "This is a comprehensive guide to Node.js development.",
+        author: "John Doe"
+    },
+    {
+        _id: 'id2',
+        title: "Advanced React Patterns",
+        content: "Learn advanced patterns in React development.",
+        author: "Jane Smith"
+    },
+    {
+        _id: 'id3',
+        title: "JavaScript Best Practices",
+        content: "Best practices for writing clean JavaScript code.",
+        author: "Bob Johnson"
+    }
+];
 
 describe('Blog Retrieval Controller', () => {
-    beforeAll(async () => {
-        // Connect to test database
-        await mongoose.connect(process.env.DATABASE_URI, { 
-            useNewUrlParser: true, 
-            useUnifiedTopology: true 
-        });
-    });
-
-    afterAll(async () => {
-        await mongoose.connection.close();
-    });
-
-    beforeEach(async () => {
-        // Clear the database before each test
-        await BlogContent.deleteMany({});
-        
-        // Insert test data
-        await BlogContent.insertMany([
-            {
-                title: "Getting Started with Node.js",
-                content: "This is a comprehensive guide to Node.js development.",
-                author: "John Doe",
-                titleEmbedding: new Array(384).fill(0.1),
-                contentEmbedding: new Array(384).fill(0.1)
-            },
-            {
-                title: "Advanced React Patterns",
-                content: "Learn advanced patterns in React development.",
-                author: "Jane Smith",
-                titleEmbedding: new Array(384).fill(0.2),
-                contentEmbedding: new Array(384).fill(0.2)
-            },
-            {
-                title: "JavaScript Best Practices",
-                content: "Best practices for writing clean JavaScript code.",
-                author: "Bob Johnson",
-                titleEmbedding: new Array(384).fill(0.3),
-                contentEmbedding: new Array(384).fill(0.3)
-            }
-        ]);
+    beforeEach(() => {
+        BlogContent.find.mockResolvedValue(FIXTURES);
     });
 
     describe('POST /blogs/retrieve', () => {
@@ -83,7 +67,7 @@ describe('Blog Retrieval Controller', () => {
                 .send({});
             
             expect(res.statusCode).toBe(400);
-            expect(res.body.message).toBe('Title query is required');
+            expect(res.body.message).toBe('Invalid request'); // now rejected by validate(schemas.retrieve)
         });
 
         it('should return empty array if no matches found', async () => {

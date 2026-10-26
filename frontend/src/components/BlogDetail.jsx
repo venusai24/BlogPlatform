@@ -5,6 +5,8 @@ import NavBar from './NavBar';
 import { useBlog, useAddComment, useLikeBlog, useAddReply } from '../hooks/useBlogs';
 import { io } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
+import parseTags from '../utils/parseTags';
+import { getToken, getUsername } from '../auth/session';
 
 function BlogDetail() {
   const navigate = useNavigate();
@@ -24,7 +26,7 @@ function BlogDetail() {
   const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyText, setReplyText] = useState('');
-  const [currentUser] = useState(localStorage.getItem('username'));
+  const [currentUser] = useState(getUsername());
 
   // Function to check if current user is the author
   const isAuthor = () => {
@@ -46,7 +48,7 @@ function BlogDetail() {
   }, [blog]);
 
   useEffect(() => {
-    const socket = io('http://localhost:5000');
+    const socket = io(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}`, { transports: ['websocket'] });
 
     socket.on('like_updated', (data) => {
       if (data.blogId === id) {
@@ -72,16 +74,16 @@ function BlogDetail() {
   const handleSave = async () => {
     try {
       await axios.put(
-        `http://localhost:5000/blogs/${id}`,
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/${id}`,
         {
           title: editTitle,
           content: editContent,
           summary: editSummary,
-          tags: editTags.split(',').map(tag => tag.trim()),
+          tags: parseTags(editTags),
         },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`, // adjust as per your storage
+            Authorization: `Bearer ${getToken()}`, // adjust as per your storage
           },
         }
       );
@@ -118,9 +120,9 @@ function BlogDetail() {
     if (!confirmDelete) return;
 
     try {
-      await axios.delete(`http://localhost:5000/blogs/${id}`, {
+      await axios.delete(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/blogs/${id}`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`, // adjust token source
+          Authorization: `Bearer ${getToken()}`, // adjust token source
         },
       });
       alert('Blog deleted successfully!');
