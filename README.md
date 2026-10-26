@@ -58,45 +58,6 @@ The Bedrock LLM path exists in code but is shelved; see [docs/audit/SHELVED_BEDR
 
 Embeddings are not cached.
 
-## Architecture on AWS
-
-Region `ap-south-1`. The picture below is the target; the parts marked in the table are switched on by Terraform variables and are **off by default**, so a plain `apply` gives the legacy shape (API with in-process BullMQ workers, Redis and Qdrant on Fargate, HTTP on the ALB).
-
-```mermaid
-flowchart LR
-  U[Browser] -->|HTTPS app.example.click| R53[Route 53]
-  R53 --> ALB[Public ALB · ACM cert · WAF<br/>2 AZs, 80→443]
-  ALB -->|default /*| WEB[ECS: web nginx SPA ×1–2]
-  ALB -->|/auth/* /blogs* /socket.io/*| API[ECS: api ×1–2<br/>RUN_WORKERS=false]
-  API -->|txn: post + outbox| MDB[(MongoDB Atlas<br/>outside AWS, via NAT)]
-  API --> VK[(ElastiCache Valkey<br/>primary + replica in ha_mode)]
-  API -->|search| VS[(S3 Vectors<br/>persistent layer)]
-  API -->|InvokeModel| BR[Bedrock<br/>titan-embed-v2]
-  W[ECS: worker ×1–2<br/>Fargate Spot] -->|poll outbox| MDB
-  W -->|Publish + traceparent| SNS{{SNS domain-events}}
-  SNS -->|filter blog.post.*| Q1[[SQS indexing]] --> W
-  Q1 -. maxReceive 5 .-> DLQ1[[indexing-dlq]]
-  W -->|reconcile post| VS
-  W -->|BullMQ summarize| VK
-  W --> LLM[Groq]
-  API & W -.->|OTLP| ADOT[ADOT sidecar] -.-> XR[X-Ray traces]
-  DLQ1 --> CW[CloudWatch alarms] --> OPS{{SNS ops-alerts}}
-```
-
-| Part | Switch (Terraform) | Default |
-|---|---|---|
-| Separate worker service, outbox relay, SNS/SQS indexing | `enable_worker_service`, `enable_domain_events` | off |
-| Lambda instead of the ECS consumer | `indexing_consumer_runtime` | `ecs` |
-| ElastiCache Valkey instead of Redis on Fargate | `redis_mode` | `fargate` |
-| S3 Vectors instead of Qdrant | `vector_store` | `qdrant` |
-| HTTPS, web service, CloudFront variant | `edge_mode`, `domain_name` | `alb_http` |
-| WAF, tracing, per-AZ NAT and Valkey replica | `enable_waf`, `enable_tracing`, `ha_mode` | off |
-| Cognito sign-in | `auth_provider` | `app` (the app's own JWT) |
-
-Everything else (VPC, ALB, ECS, EFS-backed Redis and Qdrant in the default shape, a single NAT) is always on. A single NAT, Redis, Qdrant and API task is **not** highly available; `ha_mode` is what adds the second AZ's NAT and the Valkey replica. CloudFront is not deployed: the account is unverified for it (see T21C in [docs/audit/IMPLEMENTATION_PLAN.md](docs/audit/IMPLEMENTATION_PLAN.md)).
-
-The design, its decisions and the audit that led to it are in [docs/audit/TARGET_ARCHITECTURE.md](docs/audit/TARGET_ARCHITECTURE.md) and [docs/audit/AWS_AUDIT.md](docs/audit/AWS_AUDIT.md).
-
 ## Deploying to AWS
 
 The infrastructure is three Terraform stacks, applied in this order: `bootstrap` (the state bucket), `persistent` (ECR, secrets, DNS and certificate, anything that outlives a session) and `ephemeral` (the running system, created for a session and destroyed after). CI then deploys code.
